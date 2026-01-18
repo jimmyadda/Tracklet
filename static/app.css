@@ -325,6 +325,24 @@ input, textarea, select{
   margin-bottom:10px;
 }
 
+.action-group{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+}
+
+.btn-action{
+  min-width: 92px;      /* same width for Edit/Delete */
+  text-align:center;
+  justify-content:center;
+  padding-left: 14px;   /* ensure same padding */
+  padding-right: 14px;
+}
+
+.inline-form{
+  display:inline;
+  margin:0;
+}
 
 /* =========================================================
    LOGIN PAGE (2-column card like the screenshot)

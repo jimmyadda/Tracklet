@@ -9,8 +9,15 @@
     <label class="label">Name</label>
     <input name="name" value="{{ me.name }}" required>
 
-    <label class="label">Email</label>
-    <input name="email" type="email" value="{{ me.email }}" required>
+    <label class="label">Email (read-only)</label>
+    <input value="{{ me.email }}" disabled>
+
+    <label class="label">Role</label>
+    <select name="role" required>
+      {% for r in roles %}
+        <option value="{{ r.name }}" {% if r.name == me.role %}selected{% endif %}>{{ r.name }}</option>
+      {% endfor %}
+    </select>
 
     <label class="label">New password (optional)</label>
     <input name="password" placeholder="Leave empty to keep current password">

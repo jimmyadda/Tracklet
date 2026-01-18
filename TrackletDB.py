@@ -605,28 +605,46 @@ def ensure_default_roles() -> None:
             pass            
 
 #Settings
-def update_my_settings(user_id: int, name: str, email: str, password_hash: Optional[str]) -> None:
+def update_my_settings(user_id: int, name: str, role: str, password_hash: Optional[str]) -> None:
     if password_hash:
         db_write(
-            "UPDATE users SET name=?, email=?, password_hash=? WHERE id=?",
-            (name.strip(), email.strip().lower(), password_hash, user_id),
+            "UPDATE users SET name=?, role=?, password_hash=? WHERE id=?",
+            (name.strip(), role.strip(), password_hash, user_id),
         )
     else:
         db_write(
-            "UPDATE users SET name=?, email=? WHERE id=?",
-            (name.strip(), email.strip().lower(), user_id),
+            "UPDATE users SET name=?, role=? WHERE id=?",
+            (name.strip(), role.strip(), user_id),
         )
 
 
-def update_my_settings(user_id: int, name: str, email: str, password_hash: Optional[str]) -> None:
-    if password_hash:
-        db_write(
-            "UPDATE users SET name=?, email=?, password_hash=? WHERE id=?",
-            (name.strip(), email.strip().lower(), password_hash, user_id),
+def delete_user_cascade(user_id: int, fallback_reporter_id: int) -> None:
+    """
+    Hard-delete user and cascade-clean related tables.
+    Keeps issues alive:
+      - if user was assignee -> set assignee_id NULL
+      - if user was reporter -> reassign reporter_id to fallback_reporter_id
+    """
+    with transaction() as cur:
+        # 1) Reassign issues to keep FK valid
+        cur.execute(
+            "UPDATE issues SET assignee_id=NULL, updated_at=datetime('now') WHERE assignee_id=?",
+            (user_id,),
         )
-    else:
-        db_write(
-            "UPDATE users SET name=?, email=? WHERE id=?",
-            (name.strip(), email.strip().lower(), user_id),
+        cur.execute(
+            "UPDATE issues SET reporter_id=?, updated_at=datetime('now') WHERE reporter_id=?",
+            (fallback_reporter_id, user_id),
         )
+
+        # 2) Delete dependent rows (manual cascade)
+        cur.execute("DELETE FROM issue_watchers WHERE user_id=?", (user_id,))
+        cur.execute("DELETE FROM issue_comments WHERE author_id=?", (user_id,))
+        cur.execute("DELETE FROM issue_events WHERE user_id=?", (user_id,))
+
+        # If you have issue_files table, include it too:
+        # cur.execute("DELETE FROM issue_files WHERE uploader_id=?", (user_id,))
+
+        # 3) Finally delete the user
+        cur.execute("DELETE FROM users WHERE id=?", (user_id,))
+
         

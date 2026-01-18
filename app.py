@@ -715,6 +715,20 @@ def admin_user_update(user_id: int):
     flash("User updated", "success")
     return redirect(url_for("admin_users"))
 
+@app.post("/admin/users/<int:user_id>/delete")
+@login_required
+def admin_user_delete(user_id: int):
+    if not is_admin():
+        abort(403)
+
+    if int(current_user.id) == int(user_id):
+        flash("You cannot delete yourself.", "error")
+        return redirect(url_for("admin_users"))
+
+    delete_user_cascade(user_id=user_id, fallback_reporter_id=int(current_user.id))
+    flash("User deleted.", "success")
+    return redirect(url_for("admin_users"))
+
 # -------------------------------------------------
 # Roles
 # -------------------------------------------------
@@ -770,31 +784,31 @@ def admin_roles_delete():
 @app.get("/settings")
 @login_required
 def my_settings():
-    return render_template("my_settings.html", me=get_user_by_id(int(current_user.id)))
+    return render_template(
+        "my_settings.html",
+        me=get_user_by_id(int(current_user.id)),
+        roles=list_roles_active(),
+    )
 
 
 @app.post("/settings")
 @login_required
 def my_settings_post():
     name = (request.form.get("name") or "").strip()
-    email = (request.form.get("email") or "").strip().lower()
+    role = (request.form.get("role") or "").strip()
     pwd = (request.form.get("password") or "").strip()
 
-    if not name or not email:
-        flash("Name and email are required", "error")
-        return redirect(url_for("my_settings"))
-
-    # if email belongs to someone else -> block
-    other = get_user_by_email(email)
-    if other and int(other["id"]) != int(current_user.id):
-        flash("Email already used by another user", "error")
+    if not name or not role:
+        flash("Name and role are required", "error")
         return redirect(url_for("my_settings"))
 
     pwd_hash = generate_password_hash(pwd) if pwd else None
-    update_my_settings(int(current_user.id), name, email, pwd_hash)
+    update_my_settings(int(current_user.id), name, role, pwd_hash)
 
     flash("Settings updated", "success")
     return redirect(url_for("my_settings"))
+
+
 # -------------------------------------------------
 # Health (optional)
 # -------------------------------------------------

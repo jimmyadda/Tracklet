@@ -68,15 +68,28 @@
             {% endif %}
           </td>
           <td class="muted">{{ (u.created_at or "")[:19] }}</td>
-          <td style="text-align:right;">
-          <button class="btn btn-ghost btn-topbar edit-user-btn"
-                  data-id="{{ u.id }}"
-                  data-name="{{ u.name }}"
-                  data-email="{{ u.email }}"
-                  data-role="{{ u.role }}">
-            Edit
-          </button>
-        </td>
+            <td style="text-align:right;">
+              <div class="action-group">
+                <button class="btn btn-ghost btn-topbar btn-action edit-user-btn"
+                        type="button"
+                        data-id="{{ u.id }}"
+                        data-name="{{ u.name }}"
+                        data-email="{{ u.email }}"
+                        data-role="{{ u.role }}">
+                  Edit
+                </button>
+
+                <form method="post"
+                      action="{{ url_for('admin_user_delete', user_id=u.id) }}"
+                      class="inline-form"
+                      onsubmit="return confirm('Delete this user?\n\n• Issues will stay\n• Comments & events will be removed');">
+                  <button class="btn btn-ghost btn-topbar btn-danger btn-action"
+                          type="submit">
+                    Delete
+                  </button>
+                </form>
+              </div>
+            </td>
         </tr>
         {% else %}
         <tr>
