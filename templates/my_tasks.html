@@ -1,0 +1,49 @@
+{% extends "layout.html" %}
+{% set title = "My Tasks" %}
+{% block content %}
+
+<div class="card">
+  <div class="card-title">My Tasks</div>
+  <div class="muted">Issues assigned to you</div>
+</div>
+
+{% if not issues %}
+  <div class="card">No tasks assigned to you.</div>
+{% else %}
+  <div class="card">
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th style="width:90px;">ID</th>
+            <th>Title</th>
+            <th style="width:180px;">Project</th>
+            <th style="width:140px;">Status</th>
+            <th style="width:140px;">Priority</th>
+            <th style="width:120px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for i in issues %}
+          <tr class="rowlink" data-href="{{ url_for('issue_view', issue_id=i.id) }}">
+            <td class="mono">#{{ i.id }}</td>
+            <td class="cell-strong">{{ i.title }}</td>
+            <td class="muted">{{ i.project_name }}</td>
+            <td><span class="pill">{{ i.status }}</span></td>
+            <td><span class="pill pri-{{ i.priority }}">{{ i.priority }}</span></td>
+            <td style="text-align:right;">
+              <a class="btn btn-ghost btn-topbar" style="margin-bottom:0;"
+                 href="{{ url_for('issue_view', issue_id=i.id) }}"
+                 onclick="event.stopPropagation();">
+                Open
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endif %}
+
+{% endblock %}

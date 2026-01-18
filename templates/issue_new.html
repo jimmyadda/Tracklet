@@ -1,0 +1,52 @@
+{% extends "layout.html" %}
+{% block content %}
+  <div class="header">
+    <h1>Create Issue</h1>
+  </div>
+
+  <div class="card">
+<form method="post" action="{{ url_for('issue_new_post') }}" enctype="multipart/form-data">
+ <label>Project</label>
+      <select name="project_id" required>
+        {% for p in projects %}
+          <option value="{{ p.id }}">{{ p.name }}</option>
+        {% endfor %}
+      </select>
+
+      <label>Title</label>
+      <input name="title" required />
+
+      <label>Description</label>
+      <textarea name="description" rows="5"></textarea>
+
+      <label class="label">Deadline</label>
+      <input type="date" name="due_date" value="{{ default_due }}" required>
+
+        <label class="label">Attachment (optional)</label>
+        <input type="file" name="file">
+      <div class="grid2">
+        <div>
+          <label>Priority</label>
+          <select name="priority">
+            <option value="low">low</option>
+            <option value="medium" selected>medium</option>
+            <option value="high">high</option>
+            <option value="urgent">urgent</option>
+          </select>
+        </div>
+
+        <div>
+          <label>Assignee</label>
+          <select name="assignee_id">
+            <option value="">(none)</option>
+            {% for u in users %}
+              <option value="{{ u.id }}">{{ u.name }} ({{ u.email }})</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" type="submit">Create</button>
+    </form>
+  </div>
+{% endblock %}

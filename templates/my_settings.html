@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% set title = "My Settings" %}
+{% block content %}
+
+<div class="card">
+  <div class="card-title">My Settings</div>
+
+  <form method="post" action="{{ url_for('my_settings_post') }}" style="max-width:560px;">
+    <label class="label">Name</label>
+    <input name="name" value="{{ me.name }}" required>
+
+    <label class="label">Email</label>
+    <input name="email" type="email" value="{{ me.email }}" required>
+
+    <label class="label">New password (optional)</label>
+    <input name="password" placeholder="Leave empty to keep current password">
+
+    <button class="btn btn-primary" type="submit" style="margin-bottom:0;">Save</button>
+  </form>
+</div>
+
+{% endblock %}

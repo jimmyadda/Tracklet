@@ -1,0 +1,59 @@
+{% extends "layout.html" %}
+{% block content %}
+  <div class="header">
+    <h1>Projects</h1>
+  </div>
+
+  <div class="card">
+    <form method="post" action="{{ url_for('admin_projects_post') }}">
+      <label>Name</label>
+      <input name="name" required />
+      <label>Description</label>
+      <textarea name="description" rows="3"></textarea>
+      <button class="btn btn-primary" type="submit">Create Project</button>
+    </form>
+  </div>
+
+<div class="card">
+  <div class="card-title">Existing Projects</div>
+
+  {% for p in projects %}
+    <div class="proj-item">
+      <div class="proj-head">
+        <div>
+          <div class="proj-name">{{ p.name }}</div>
+          <div class="muted" style="font-size:12px;">#{{ p.id }}</div>
+        </div>
+
+        <form method="post" action="{{ url_for('admin_project_delete', project_id=p.id) }}"
+              onsubmit="return confirm('Delete project? If it has issues it will be deactivated.');">
+          <button class="btn btn-ghost btn-danger" type="submit" style="margin-bottom:0;">Delete</button>
+        </form>
+      </div>
+
+      {% if p.description %}
+        <div class="muted" style="margin:6px 0 10px 0;">{{ p.description }}</div>
+      {% endif %}
+
+      <details class="gh-details">
+        <summary>GitHub (optional)</summary>
+
+        <form method="post" action="{{ url_for('admin_project_github', project_id=p.id) }}" class="mini-form">
+          <div class="row">
+            <input name="github_owner" placeholder="owner" value="{{ p.github_owner or '' }}">
+            <input name="github_repo" placeholder="repo" value="{{ p.github_repo or '' }}">
+          </div>
+          <div class="row">
+            <input name="github_default_branch" placeholder="branch" value="{{ p.github_default_branch or 'main' }}">
+            <input name="github_repo_url" placeholder="repo url (optional)" value="{{ p.github_repo_url or '' }}">
+          </div>
+          <button class="btn btn-primary" type="submit" style="margin-bottom:0;">Save</button>
+        </form>
+      </details>
+    </div>
+  {% else %}
+    <div class="muted">No projects yet.</div>
+  {% endfor %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% set title = "Projects" %}
+{% block content %}
+
+<div class="card">
+  <div class="card-title">Projects</div>
+
+  <div class="list">
+    {% for p in projects %}
+      <a class="list-row" href="{{ url_for('project_view', project_id=p.id) }}">
+        <div class="list-main">
+          <div class="list-title">{{ p.name }}</div>
+        </div>
+        <div class="list-meta">Open</div>
+      </a>
+    {% else %}
+      <div class="muted">No projects yet.</div>
+    {% endfor %}
+  </div>
+</div>
+
+{% endblock %}

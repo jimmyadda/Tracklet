@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{{ title or "Tracklet" }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+  <div class="app">
+
+    <aside class="sidebar">
+
+      <a class="brand" href="{{ url_for('my_tasks') }}">
+        <img class="brand-img" src="{{ url_for('static', filename='img/tracklet_icon_128.png') }}" alt="Tracklet" />
+        <div class="brand-text">
+          <div class="brand-title">Tracklet</div>
+          <div class="brand-sub">Issues • Projects</div>
+        </div>
+      </a>
+
+    <nav class="nav">
+      <a class="navlink" href="{{ url_for('projects_list') }}">Projects</a>
+      <a class="navlink" href="{{ url_for('my_tasks') }}">My Tasks</a>
+      <a class="navlink" href="{{ url_for('issue_new') }}">Create Issue</a>
+      <a class="navlink" href="{{ url_for('my_settings') }}">My Settings</a>
+
+      {% if current_user.is_authenticated and current_user.role == 'admin' %}
+        <div class="nav-sep"></div>
+        <a class="navlink" href="{{ url_for('admin_projects') }}">Create Project</a>
+        <a class="navlink" href="{{ url_for('admin_users') }}">Users</a>
+      {% endif %}
+    </nav>
+
+    </aside>
+
+    <main class="main">
+
+ <!-- Topbar -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="app-title">Tracklet</div>
+
+    <form class="topbar-search" method="get" action="{{ url_for('search') }}">
+      <input name="q" placeholder="Search issues or projects…" value="{{ request.args.get('q','') }}">
+    </form>
+  </div>
+
+  {% if current_user.is_authenticated %}
+  <div class="topbar-right">
+    <div class="user-chip">
+      <div class="user-avatar">{{ (current_user.name or "U")[:1] | upper }}</div>
+      <div class="user-meta">
+        <div class="user-name">{{ current_user.name }}</div>
+        <div class="user-email">{{ current_user.email }}</div>
+      </div>
+    </div>
+
+    <form method="post" action="{{ url_for('logout') }}">
+      <button class="btn btn-ghost btn-topbar" type="submit">Logout</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+
+<!--End Top nav-->
+
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="toasts">
+            {% for cat, msg in messages %}
+              <div class="toast toast-{{cat}}">{{ msg }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </main>
+
+  </div>
+</body>
+
+<script>
+document.addEventListener("click", function (e) {
+  const row = e.target.closest(".rowlink");
+  if (row && row.dataset.href) {
+    window.location.href = row.dataset.href;
+  }
+});
+</script>
+
+</html>

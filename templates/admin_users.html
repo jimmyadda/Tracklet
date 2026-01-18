@@ -1,0 +1,264 @@
+{% extends "layout.html" %}
+{% set title = "Users" %}
+{% block content %}
+
+<!-- Add User -->
+<div class="card">
+  <div class="card-title">Add User</div>
+
+  <form method="post" action="{{ url_for('admin_users_post') }}" >
+    <label class="label">Name</label>
+    <input name="name" required placeholder="Full name">
+
+    <label class="label">Email</label>
+    <input name="email" type="email" required placeholder="name@company.com">
+
+    <label class="label">Role</label>
+    <select name="role" id="roleSelect">
+    {% for r in roles %}
+        <option value="{{ r.name }}">{{ r.name }}</option>
+    {% endfor %}
+    </select>
+
+    <button class="btn btn-ghost" type="button" onclick="openRolesModal()" style="margin-bottom:0;">
+    Manage roles
+    </button>
+
+    <label class="label">Temporary password</label>
+    <input name="password" required placeholder="Set a temp password">
+
+    <button class="btn btn-primary" type="submit">Create User</button>
+    <div class="muted" style="font-size:12px;">
+      User can change password later (Settings coming soon).
+    </div>
+  </form>
+</div>
+
+<!-- Existing Users -->
+<div class="card">
+  <div class="card-title">Existing Users</div>
+
+  <div class="table-wrap">
+    <table class="table table-users">
+      <thead>
+        <tr>
+          <th style="width:80px;">ID</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th style="width:120px;">Role</th>
+          <th style="width:110px;">Active</th>
+          <th style="width:180px;">Created</th>
+          <th style="width:120px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td class="mono">#{{ u.id }}</td>
+          <td class="cell-strong">{{ u.name }}</td>
+          <td class="muted">{{ u.email }}</td>
+          <td>
+            <span class="pill role-{{ u.role }}">{{ u.role }}</span>
+          </td>
+          <td>
+            {% if u.is_active %}
+              <span class="badge badge-ok">Yes</span>
+            {% else %}
+              <span class="badge badge-off">No</span>
+            {% endif %}
+          </td>
+          <td class="muted">{{ (u.created_at or "")[:19] }}</td>
+          <td style="text-align:right;">
+          <button class="btn btn-ghost btn-topbar edit-user-btn"
+                  data-id="{{ u.id }}"
+                  data-name="{{ u.name }}"
+                  data-email="{{ u.email }}"
+                  data-role="{{ u.role }}">
+            Edit
+          </button>
+        </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="muted">No users found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+
+<!--Modal Roles-->
+<div id="rolesModal" class="modal-backdrop" style="display:none;">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Manage Roles</div>
+      <button class="btn btn-ghost" type="button" onclick="closeRolesModal()" style="margin-bottom:0;">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <form id="roleAddForm" class="modal-row">
+        <input id="newRoleName" placeholder="new role name (e.g. qa_lead)" />
+        <button class="btn btn-primary" type="submit" style="margin-bottom:0;">Add</button>
+      </form>
+
+      <div id="rolesError" class="muted" style="margin:8px 0 0 0;"></div>
+
+      <div class="table-wrap" style="margin-top:12px;">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Role</th>
+              <th style="width:120px;">Active</th>
+              <th style="width:140px;"></th>
+            </tr>
+          </thead>
+          <tbody id="rolesTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal-foot muted" style="font-size:12px;">
+      Tip: You can’t delete a role that is currently used by any user.
+    </div>
+  </div>
+</div>
+
+
+<!--Modal update user-->
+<div id="editUserModal" class="modal-backdrop" style="display:none;">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Edit User</div>
+      <button class="btn btn-ghost" type="button" onclick="closeEditUser()" style="margin-bottom:0;">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <form id="editUserForm" method="post">
+        <label class="label">Name</label>
+        <input name="name" id="eu_name" required>
+
+        <label class="label">Email</label>
+        <input name="email" id="eu_email" type="email" required>
+
+        <label class="label">Role</label>
+        <select name="role" id="eu_role">
+          {% for r in roles %}
+            <option value="{{ r.name }}">{{ r.name }}</option>
+          {% endfor %}
+        </select>
+
+        <label class="label">New password (optional)</label>
+        <input name="password" id="eu_pwd" placeholder="Leave empty to keep current password">
+
+        <button class="btn btn-primary" type="submit" style="margin-bottom:0;">Save</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+
+  document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".edit-user-btn");
+  if (!btn) return;
+
+  openEditUser(
+    btn.dataset.id,
+    btn.dataset.name,
+    btn.dataset.email,
+    btn.dataset.role
+  );
+});
+
+function openEditUser(id, name, email, role){
+  document.getElementById("editUserModal").style.display = "flex";
+  document.getElementById("editUserForm").action = `/admin/users/${id}/update`;
+  document.getElementById("eu_name").value = name;
+  document.getElementById("eu_email").value = email;
+  document.getElementById("eu_role").value = role;
+  document.getElementById("eu_pwd").value = "";
+}
+function closeEditUser(){
+  document.getElementById("editUserModal").style.display = "none";
+}
+
+async function refreshRoles() {
+  const res = await fetch("{{ url_for('admin_roles_list') }}");
+  const data = await res.json();
+
+  const body = document.getElementById("rolesTableBody");
+  body.innerHTML = "";
+
+  for (const r of data.roles) {
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td><span class="pill role-${r.name}">${r.name}</span></td>
+      <td>${r.is_active ? '<span class="badge badge-ok">Yes</span>' : '<span class="badge badge-off">No</span>'}</td>
+      <td style="text-align:right;">
+        <button class="btn btn-ghost" style="margin-bottom:0;" ${["admin","user","pm"].includes(r.name) ? "disabled" : ""} onclick="deleteRole('${r.name}')">
+          Remove
+        </button>
+      </td>
+    `;
+    body.appendChild(tr);
+  }
+
+  // also refresh the Add User select
+  const roleSelect = document.getElementById("roleSelect");
+  if (roleSelect) {
+    // keep current selection if possible
+    const current = roleSelect.value;
+    roleSelect.innerHTML = "";
+    for (const r of data.roles.filter(x => x.is_active)) {
+      const opt = document.createElement("option");
+      opt.value = r.name;
+      opt.textContent = r.name;
+      roleSelect.appendChild(opt);
+    }
+    if ([...roleSelect.options].some(o => o.value === current)) roleSelect.value = current;
+  }
+}
+
+function openRolesModal(){
+  document.getElementById("rolesModal").style.display = "block";
+  document.getElementById("rolesError").textContent = "";
+  refreshRoles();
+}
+function closeRolesModal(){
+  document.getElementById("rolesModal").style.display = "none";
+}
+
+async function deleteRole(name){
+  const fd = new FormData();
+  fd.append("name", name);
+  const res = await fetch("{{ url_for('admin_roles_delete') }}", { method:"POST", body: fd });
+  const data = await res.json();
+  document.getElementById("rolesError").textContent = data.ok ? "" : (data.error || "Error");
+  if (data.ok) refreshRoles();
+}
+
+document.getElementById("roleAddForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = document.getElementById("newRoleName").value.trim().toLowerCase();
+  if (!name) return;
+
+  const fd = new FormData();
+  fd.append("name", name);
+
+  const res = await fetch("{{ url_for('admin_roles_add') }}", { method:"POST", body: fd });
+  const data = await res.json();
+
+  document.getElementById("rolesError").textContent = data.ok ? "" : (data.error || "Error");
+  if (data.ok) {
+    document.getElementById("newRoleName").value = "";
+    refreshRoles();
+  }
+});
+</script>
+
+
+{% endblock %}

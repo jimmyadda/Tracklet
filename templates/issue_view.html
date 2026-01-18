@@ -1,0 +1,102 @@
+{% extends "layout.html" %}
+{% block content %}
+  <div class="header">
+    <div>
+      <h1>#{{ issue.id }} — {{ issue.title }}</h1>
+      <div class="muted">{{ issue.project_name }} • Reported by {{ issue.reporter_name }}</div>
+    </div>
+    <div class="actions">
+      {% if issue.assignee_id and issue.status != 'closed' and issue.assignee_id != current_user.id|int %}
+        <form method="post" action="{{ url_for('issue_remind', issue_id=issue.id) }}"
+              onsubmit="return confirm('Send reminder email to the assignee?');">
+          <button class="btn btn-outline" type="submit">🔔 Send reminder</button>
+        </form>
+      {% endif %}
+
+      {% if issue.status != 'closed' and (issue.assignee_id == current_user.id|int or current_user.role == 'admin') %}
+        <form method="post" action="{{ url_for('issue_close', issue_id=issue.id) }}"
+              onsubmit="return confirm('Close this issue?');">
+          <button class="btn btn-danger" type="submit">Close</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="kv">
+        <div><span class="k">Status</span> <span class="pill">{{ issue.status }}</span></div>
+        <div><span class="k">Priority</span> <span class="pill pri pri-{{ issue.priority }}">{{ issue.priority }}</span></div>
+        <div><span class="k">Assignee</span> {{ issue.assignee_name or "(none)" }}</div>
+      </div>
+      <hr>
+      <div class="desc">{{ issue.description or "No description." }}</div>
+
+      <div class="muted">Deadline: <b>{{ issue.due_date }}</b></div>
+
+      <div class="card">
+  <div class="card-title">Attachments</div>
+
+  <form method="post" action="{{ url_for('issue_upload', issue_id=issue.id) }}" enctype="multipart/form-data">
+    <input type="file" name="file" required>
+    <button class="btn btn-primary" type="submit">Upload</button>
+  </form>
+
+  <div class="attach-grid">
+    {% for f in files %}
+      <div class="attach-card">
+        {% if f.mime_type and f.mime_type.startswith('image/') %}
+          <img class="preview-blur" src="{{ url_for('file_download', file_id=f.id) }}" alt="{{ f.original_name }}" />
+        {% else %}
+          <div class="preview-blur" style="padding:26px; text-align:center;">
+            <div style="font-weight:800;">FILE</div>
+            <div class="muted">{{ f.original_name }}</div>
+          </div>
+        {% endif %}
+
+        <div class="attach-meta">
+          <span>{{ f.uploader_name }}</span>
+          <a href="{{ url_for('file_download', file_id=f.id) }}">Download</a>
+        </div>
+      </div>
+    {% else %}
+      <div class="muted">No attachments yet.</div>
+    {% endfor %}
+  </div>
+</div>
+    </div>
+
+<div class="card">
+  <div class="card-title">Comments</div>
+
+  <!-- Add comment -->
+  <form method="post" action="{{ url_for('issue_add_comment', issue_id=issue.id) }}" class="comment-form">
+    <textarea name="body" class="comment-input" rows="3" placeholder="Write a comment…" required></textarea>
+    <div class="comment-actions">
+      <button class="btn btn-primary" type="submit" style="margin-bottom:0;">Add comment</button>
+    </div>
+  </form>
+
+  <div class="comment-list">
+    {% for c in comments %}
+      <div class="comment-item">
+        <div class="comment-head">
+          <div class="comment-author">
+            <div class="comment-avatar">{{ (c.author_name or "U")[:1] | upper }}</div>
+            <div class="comment-author-meta">
+              <div class="comment-author-name">{{ c.author_name }} : </div>
+              <div class="comment-time">{{ (c.created_at or "")[:19] }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="comment-body">{{ c.body }}</div>
+      </div>
+    {% else %}
+      <div class="muted">No comments yet.</div>
+    {% endfor %}
+  </div>
+</div>
+
+  </div>
+{% endblock %}

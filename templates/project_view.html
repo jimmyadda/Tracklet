@@ -1,0 +1,74 @@
+{% extends "layout.html" %}
+{% set title = project.name %}
+{% block content %}
+
+<div class="grid-2">
+
+  <!-- Backlog -->
+  <div class="card">
+    <div class="card-title">Backlog</div>
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th style="width:80px;">ID</th>
+          <th>Title</th>
+          <th style="width:140px;">Status</th>
+          <th style="width:140px;">Priority</th>
+          <th style="width:180px;">Assignee</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in issues %}
+        <tr class="rowlink" data-href="{{ url_for('issue_view', issue_id=i.id) }}"> <td>#{{ i.id }}</td>
+          <td>{{ i.title }}</td>
+          <td><span class="pill">{{ i.status }}</span></td>
+          <td><span class="pill pri-{{ i.priority }}">{{ i.priority }}</span></td>
+          <td>{{ i.assignee_name or "—" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">No issues in this project yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Versions -->
+  <div class="card">
+    <div class="card-title">Versions</div>
+
+    {% if project.github_owner and project.github_repo %}
+      <div class="muted mb8">
+        Repo:
+        <a href="https://github.com/{{project.github_owner}}/{{project.github_repo}}" target="_blank">
+          {{project.github_owner}}/{{project.github_repo}}
+        </a>
+      </div>
+    {% else %}
+      <div class="muted">No GitHub repo connected to this project.</div>
+    {% endif %}
+
+    {% if github_error %}
+      <div class="toast toast-error">GitHub error: {{ github_error }}</div>
+    {% endif %}
+
+    <div class="list">
+      {% for r in releases %}
+        <a class="list-row" href="{{ r.url }}" target="_blank">
+          <div class="list-main">
+            <div class="list-title">{{ r.name }}</div>
+            <div class="muted">{{ r.tag }}</div>
+          </div>
+          <div class="list-meta">
+            {% if r.published_at %}{{ r.published_at[:10] }}{% else %}tag{% endif %}
+          </div>
+        </a>
+      {% else %}
+        <div class="muted">No releases/tags found.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

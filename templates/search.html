@@ -1,0 +1,77 @@
+{% extends "layout.html" %}
+{% set title = "Search" %}
+{% block content %}
+
+<div class="card">
+  <div class="card-title">Search</div>
+  <div class="muted">Query: <b>{{ q or "—" }}</b></div>
+</div>
+
+{% if issue_by_id %}
+  <div class="card">
+    <div class="card-title">Direct match</div>
+    <div class="list">
+      <a class="list-row" href="{{ url_for('issue_view', issue_id=issue_by_id.id) }}">
+        <div>
+          <div class="list-title">#{{ issue_by_id.id }} — {{ issue_by_id.title }}</div>
+          <div class="list-meta muted">{{ issue_by_id.project_name }} • {{ issue_by_id.status }} • {{ issue_by_id.priority }}</div>
+        </div>
+        <div class="list-meta">Open</div>
+      </a>
+    </div>
+  </div>
+{% endif %}
+
+<div class="card">
+  <div class="card-title">Projects</div>
+  <div class="list">
+    {% for p in projects %}
+      <a class="list-row" href="{{ url_for('project_view', project_id=p.id) }}">
+        <div class="list-main">
+          <div class="list-title">{{ p.name }}</div>
+          <div class="muted" style="font-size:12px;">
+            {% if p.github_owner and p.github_repo %}
+              {{ p.github_owner }}/{{ p.github_repo }}
+            {% endif %}
+          </div>
+        </div>
+        <div class="list-meta">Open</div>
+      </a>
+    {% else %}
+      <div class="muted">No projects found.</div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Issues</div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th style="width:90px;">ID</th>
+          <th>Title</th>
+          <th style="width:160px;">Project</th>
+          <th style="width:140px;">Status</th>
+          <th style="width:140px;">Priority</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in issues %}
+        <tr class="rowlink" data-href="{{ url_for('issue_view', issue_id=i.id) }}">
+          <td class="mono">#{{ i.id }}</td>
+          <td class="cell-strong">{{ i.title }}</td>
+          <td class="muted">{{ i.project_name }}</td>
+          <td><span class="pill">{{ i.status }}</span></td>
+          <td><span class="pill pri-{{ i.priority }}">{{ i.priority }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">No issues found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

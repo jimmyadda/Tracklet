@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ settings.APP_NAME }} • Login</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+<style>
+  .login-right{
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+</style>
+</head>
+
+<body class="login-page">
+
+  <div class="login-wrap">
+
+    <div class="login-card">
+
+      <!-- LEFT PANEL -->
+      <div class="login-left">
+        <div class="login-left-brand">
+          <img class="login-left-icon" src="{{ url_for('static', filename='img/tracklet_icon_128.png') }}" alt="Tracklet">
+          <div>
+            <div class="login-left-title">{{ settings.APP_NAME }}</div>
+            <div class="login-left-sub">Internal tasks & issue tracking</div>
+          </div>
+        </div>
+
+        <div class="login-left-text">
+          Assign tasks, track bugs, upload files, and stay aligned across projects.
+        </div>
+
+        <div class="login-left-actions">
+          <button class="btn btn-social btn-social-ghost" type="button" disabled title="Coming soon">
+            Sign in with GitHub (soon)
+          </button>
+          <button class="btn btn-social btn-social-ghost" type="button" disabled title="Coming soon">
+            Sign in with Google (soon)
+          </button>
+        </div>
+
+        <div class="login-left-footer">
+          © {{ settings.APP_NAME }}
+        </div>
+      </div>
+
+      <!-- RIGHT PANEL -->
+      <div class="login-right">
+        <h1 class="login-h1">Login to your account</h1>
+        <div class="login-hint muted">
+          Use your organization credentials.
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="login-flashes">
+              {% for category, message in messages %}
+                <div class="flash flash-{{ category }}">{{ message }}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        <form method="post" action="{{ url_for('login_post') }}" class="login-form">
+          <label class="label">Email address</label>
+          <input name="email" type="email" placeholder="name@company.com" required>
+
+          <label class="label">Password</label>
+          <input name="password" type="password" placeholder="••••••••" required>
+
+          <div class="login-row">
+            <label class="remember">
+              <input type="checkbox" disabled>
+              <span>Remember me (soon)</span>
+            </label>
+
+            <a class="link-muted" href="#" onclick="return false;" title="Coming soon">Forgot password?</a>
+          </div>
+
+          <button class="btn btn-primary btn-login w100" type="submit">Login with email</button>
+
+          <div class="login-mini muted">
+            Admin creates users in <b>Admin → Users</b>.
+          </div>
+        </form>
+      </div>
+
+    </div>
+
+  </div>
+
+</body>
+</html>

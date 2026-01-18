@@ -1,0 +1,138 @@
+# TrackletMailer.py
+from __future__ import annotations
+
+import smtplib
+from email.message import EmailMessage
+from typing import Optional
+
+from config import settings
+
+
+class MailerError(RuntimeError):
+    pass
+
+
+def is_configured() -> bool:
+    """
+    Returns True if SMTP settings are available.
+    """
+    return bool(
+        settings.SMTP_HOST
+        and settings.SMTP_USER
+        and settings.SMTP_PASS
+        and (settings.SMTP_FROM or settings.SMTP_USER)
+    )
+
+
+def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = None) -> None:
+    if not is_configured():
+        raise MailerError("SMTP not configured")
+
+    sender = from_addr or settings.SMTP_FROM or settings.SMTP_USER
+
+    msg = EmailMessage()
+    msg["From"] = sender
+    msg["To"] = to
+    msg["Subject"] = subject
+    msg.set_content(body)
+
+    try:
+        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as s:
+            s.ehlo()
+            s.starttls()
+            s.ehlo()
+            s.login(settings.SMTP_USER, settings.SMTP_PASS)
+            s.send_message(msg)
+    except Exception as e:
+        raise MailerError(str(e)) from e
+
+
+# ----------------------------
+# Domain helpers
+# ----------------------------
+
+def send_issue_assigned(
+    *,
+    to: str,
+    assignee_name: str,
+    issue_id: int,
+    title: str,
+    priority: str,
+    issue_url: str,
+) -> None:
+    subject = f"New Issue Assigned: #{issue_id} – {title}"
+    body = (
+        f"Hi {assignee_name},\n\n"
+        f"A new issue was assigned to you.\n\n"
+        f"Issue #{issue_id}: {title}\n"
+        f"Priority: {priority}\n"
+        f"Status: open\n\n"
+        f"Open issue:\n{issue_url}\n"
+    )
+    send_email(to, subject, body)
+
+
+def send_issue_reminder(
+    *,
+    to: str,
+    assignee_name: str,
+    issue_id: int,
+    title: str,
+    project_name: str,
+    status: str,
+    priority: str,
+    sender_name: str,
+    issue_url: str,
+) -> None:
+    subject = f"Reminder: Issue #{issue_id} – {title}"
+    body = (
+        f"Hi {assignee_name},\n\n"
+        f"This is a reminder regarding the following issue:\n\n"
+        f"Project: {project_name}\n"
+        f"Issue #{issue_id}: {title}\n"
+        f"Status: {status}\n"
+        f"Priority: {priority}\n\n"
+        f"Sent by: {sender_name}\n\n"
+        f"Open issue:\n{issue_url}\n"
+    )
+    send_email(to, subject, body)
+
+def send_issue_comment(
+    to: str,
+    recipient_name: str,
+    issue_id: int,
+    title: str,
+    actor_name: str,
+    comment_text: str,
+    issue_url: str,
+):
+    subject = f"[Tracklet] New note on #{issue_id}: {title}"
+    body = f"""Hi {recipient_name},
+
+{actor_name} added a note on issue #{issue_id}:
+
+{comment_text}
+
+Open issue: {issue_url}
+"""
+    send_email(to=to, subject=subject, body=body)
+
+def send_issue_status_changed(
+    to: str,
+    recipient_name: str,
+    issue_id: int,
+    title: str,
+    actor_name: str,
+    new_status: str,
+    note_text: str,
+    issue_url: str,
+):
+    subject = f"[Tracklet] Issue #{issue_id} is now {new_status}"
+    note_part = f"\nNote:\n{note_text}\n" if note_text else ""
+    body = f"""Hi {recipient_name},
+
+{actor_name} changed issue #{issue_id} to: {new_status}.{note_part}
+
+Open issue: {issue_url}
+"""
+    send_email(to=to, subject=subject, body=body)
