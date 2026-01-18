@@ -136,3 +136,22 @@ def send_issue_status_changed(
 Open issue: {issue_url}
 """
     send_email(to=to, subject=subject, body=body)
+
+def send_welcome_user(to: str, name: str, temp_password: str, login_url: str):
+    subject = "[Tracklet] Your account is ready"
+    body = f"""Hi {name},
+
+Welcome to Tracklet.
+
+Login here:
+{login_url}
+
+Temporary password:
+{temp_password}
+
+After login, go to "My Settings" and change your password.
+
+Thanks,
+Tracklet
+"""
+    send_email(to=to, subject=subject, body=body)

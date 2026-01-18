@@ -41,6 +41,7 @@ from TrackletMailer import (
     MailerError,
     is_configured as mail_is_configured,
     send_issue_status_changed,
+    send_welcome_user,
 )
 
 from TrackletGitHub import get_releases, get_tags
@@ -667,12 +668,31 @@ def admin_users_post():
         return redirect(url_for("admin_users"))
 
     try:
-        create_user(name, email, role, generate_password_hash(password))
+        # Create user returns lastrowid
+        user_id = create_user(name, email, role, generate_password_hash(password))
         flash("User created", "success")
+
+        # Send welcome email 
+        if mail_is_configured():
+            try:
+                # Adjust endpoint name if yours is different (e.g. login_get)
+                login_url = f"{request.url_root.rstrip('/')}{url_for('login')}"
+                send_welcome_user(
+                    to=email,
+                    name=name,
+                    temp_password=password,
+                    login_url=login_url,
+                )
+                # optional: if you have an admin audit table later; otherwise remove
+                # log_admin_event(int(current_user.id), "user_welcome_sent", meta_json=str(user_id))
+            except MailerError as e:
+                flash(f"User created, email failed: {e}", "error")
+
     except sqlite3.IntegrityError:
         flash("Email already exists", "error")
 
     return redirect(url_for("admin_users"))
+
 
 @app.post("/admin/users/<int:user_id>/update")
 @login_required
