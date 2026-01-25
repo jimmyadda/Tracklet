@@ -23,14 +23,14 @@ def _provider() -> str:
 def is_configured() -> bool:
     p = _provider()
     if p == "resend":
-        return bool(os.getenv("RESEND_API_KEY")) and bool(settings.SMTP_FROM or settings.SMTP_USER)
+        return bool(settings.RESEND_API_KEY) and bool(settings.SMTP_FROM or settings.SMTP_USER)
+
     return bool(
         settings.SMTP_HOST
         and settings.SMTP_USER
         and settings.SMTP_PASS
         and (settings.SMTP_FROM or settings.SMTP_USER)
     )
-
 
 def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = None) -> None:
     if not is_configured():
@@ -41,7 +41,7 @@ def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = N
 
     # --- Resend (HTTPS) ---
     if p == "resend":
-        api_key = os.getenv("RESEND_API_KEY")
+        api_key = settings.RESEND_API_KEY
         if not api_key:
             raise MailerError("RESEND_API_KEY missing")
 
@@ -62,6 +62,7 @@ def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = N
             )
 
             print(f"[MAIL] Resend to={to} subject={subject} status={r.status_code}")
+            print("RESEND configured?", bool(settings.RESEND_API_KEY), "FROM:", settings.SMTP_FROM, "provider:", _provider())
 
             if r.status_code >= 400:
                 raise MailerError(f"Resend error {r.status_code}: {r.text}")
