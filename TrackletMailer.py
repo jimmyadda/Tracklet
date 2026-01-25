@@ -1,22 +1,29 @@
 # TrackletMailer.py
 from __future__ import annotations
 
+import os
 import smtplib
 from email.message import EmailMessage
 import ssl
 from typing import Optional
 
+import requests
+
 from config import settings
+
 
 
 class MailerError(RuntimeError):
     pass
 
+def _provider() -> str:
+    return (os.getenv("MAIL_PROVIDER") or "smtp").strip().lower()
+
 
 def is_configured() -> bool:
-    """
-    Returns True if SMTP settings are available.
-    """
+    p = _provider()
+    if p == "resend":
+        return bool(os.getenv("RESEND_API_KEY")) and bool(settings.SMTP_FROM or settings.SMTP_USER)
     return bool(
         settings.SMTP_HOST
         and settings.SMTP_USER
@@ -25,13 +32,38 @@ def is_configured() -> bool:
     )
 
 
-
 def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = None) -> None:
     if not is_configured():
-        raise MailerError("SMTP not configured")
+        raise MailerError("Mailer not configured")
 
     sender = from_addr or settings.SMTP_FROM or settings.SMTP_USER
+    p = _provider()
 
+    # --- Resend (HTTPS) ---
+    if p == "resend":
+        api_key = os.getenv("RESEND_API_KEY")
+        try:
+            r = requests.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "from": sender,
+                    "to": [to],
+                    "subject": subject,
+                    "text": body,
+                },
+                timeout=30,
+            )
+            if r.status_code >= 400:
+                raise MailerError(f"Resend error {r.status_code}: {r.text}")
+            return
+        except Exception as e:
+            raise MailerError(repr(e)) from e
+
+    # --- SMTP fallback (local/dev) ---
     msg = EmailMessage()
     msg["From"] = sender
     msg["To"] = to
@@ -40,16 +72,15 @@ def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = N
 
     try:
         port = int(settings.SMTP_PORT)
+        host = settings.SMTP_HOST
 
         if port == 465:
-            # SSL (smtps)
             context = ssl.create_default_context()
-            with smtplib.SMTP_SSL(settings.SMTP_HOST, port, timeout=30, context=context) as s:
+            with smtplib.SMTP_SSL(host, port, timeout=30, context=context) as s:
                 s.login(settings.SMTP_USER, settings.SMTP_PASS)
                 s.send_message(msg)
         else:
-            # STARTTLS (587)
-            with smtplib.SMTP(settings.SMTP_HOST, port, timeout=30) as s:
+            with smtplib.SMTP(host, port, timeout=30) as s:
                 s.ehlo()
                 context = ssl.create_default_context()
                 s.starttls(context=context)
