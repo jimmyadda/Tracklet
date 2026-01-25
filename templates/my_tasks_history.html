@@ -1,24 +1,21 @@
 {% extends "layout.html" %}
-{% set title = "My Tasks" %}
+{% set title = "My Tasks History" %}
 {% block content %}
 
 <div class="card">
-  <div class="card-title">My Tasks</div>
-  <div class="muted">Issues assigned to you</div>
-
   <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-  <div>
-    <div class="card-title">My Tasks</div>
-    <div class="muted">Open issues assigned to you</div>
+    <div>
+      <div class="card-title">Closed Tasks</div>
+      <div class="muted">Closed issues assigned to you</div>
+    </div>
+    <a class="btn btn-ghost btn-topbar" style="margin-bottom:0;" href="{{ url_for('my_tasks') }}">
+      Back to My Tasks
+    </a>
   </div>
-  <a class="btn btn-ghost btn-topbar" style="margin-bottom:0;" href="{{ url_for('my_tasks_history') }}">
-    Watch history
-  </a>
-</div>
 </div>
 
 {% if not issues %}
-  <div class="card">No tasks assigned to you.</div>
+  <div class="card">No closed issues.</div>
 {% else %}
   <div class="card">
     <div class="table-wrap">
@@ -28,9 +25,8 @@
             <th style="width:90px;">ID</th>
             <th>Title</th>
             <th style="width:180px;">Project</th>
-            <th style="width:140px;">Status</th>
+            <th style="width:160px;">Closed at</th>
             <th style="width:140px;">Priority</th>
-            <th style="width:120px;"></th>
           </tr>
         </thead>
         <tbody>
@@ -39,15 +35,8 @@
             <td class="mono">#{{ i.id }}</td>
             <td class="cell-strong">{{ i.title }}</td>
             <td class="muted">{{ i.project_name }}</td>
-            <td><span class="pill">{{ i.status }}</span></td>
+            <td class="muted">{{ (i.closed_at or "")[:19] }}</td>
             <td><span class="pill pri-{{ i.priority }}">{{ i.priority }}</span></td>
-            <td style="text-align:right;">
-              <a class="btn btn-ghost btn-topbar" style="margin-bottom:0;"
-                 href="{{ url_for('issue_view', issue_id=i.id) }}"
-                 onclick="event.stopPropagation();">
-                Open
-              </a>
-            </td>
           </tr>
           {% endfor %}
         </tbody>

@@ -266,7 +266,40 @@ def update_user(user_id: int, name: str, email: str, role: str, password_hash: s
             "UPDATE users SET name=?, email=?, role=? WHERE id=?",
             (name.strip(), email.strip().lower(), role.strip(), user_id),
         )
-
+def update_user_info(
+    user_id: int,
+    name: str,
+    email: str,
+    role: str,
+    password_hash: Optional[str] = None,
+) -> None:
+    if password_hash:
+        db_write(
+            """
+            UPDATE users
+            SET name=?, email=?, role=?, password_hash=?
+            WHERE id=?
+            """,
+            (name.strip(), email.strip().lower(), role.strip(), password_hash, user_id),
+        )
+    else:
+        db_write(
+            """
+            UPDATE users
+            SET name=?, email=?, role=?
+            WHERE id=?
+            """,
+            (name.strip(), email.strip().lower(), role.strip(), user_id),
+        )
+def list_users_without_welcome() -> list[sqlite3.Row]:
+    return db_read_all(
+        """
+        SELECT *
+        FROM users
+        WHERE email LIKE '%@local'
+           OR name = ''
+        """
+    )        
 # -------------------------------------------------------
 # Projects
 # -------------------------------------------------------
@@ -329,15 +362,17 @@ def delete_project_hard(project_id: int) -> None:
 # Issues
 # -------------------------------------------------------
 
-def get_my_tasks(user_id: int) -> list[sqlite3.Row]:
+def get_my_tasks(user_id: int, *, include_closed: bool = False) -> list[sqlite3.Row]:
+    where_extra = "" if include_closed else " AND i.status <> 'closed'"
+
     return db_read_all(
-        """
+        f"""
         SELECT i.*, p.name AS project_name,
                au.name AS assignee_name
         FROM issues i
         JOIN projects p ON p.id=i.project_id
         LEFT JOIN users au ON au.id=i.assignee_id
-        WHERE i.assignee_id=?
+        WHERE i.assignee_id=? {where_extra}
         ORDER BY
           CASE i.status WHEN 'open' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'blocked' THEN 3 ELSE 4 END,
           CASE i.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
@@ -346,6 +381,19 @@ def get_my_tasks(user_id: int) -> list[sqlite3.Row]:
         (user_id,),
     )
 
+def get_my_tasks_history(user_id: int) -> list[sqlite3.Row]:
+    return db_read_all(
+        """
+        SELECT i.*, p.name AS project_name,
+               au.name AS assignee_name
+        FROM issues i
+        JOIN projects p ON p.id=i.project_id
+        LEFT JOIN users au ON au.id=i.assignee_id
+        WHERE i.assignee_id=? AND i.status='closed'
+        ORDER BY i.closed_at DESC, i.updated_at DESC
+        """,
+        (user_id,),
+    )
 
 def create_issue(project_id: int, title: str, description: str, priority: str,
                  reporter_id: int, assignee_id: Optional[int], due_date: str) -> int:
@@ -356,7 +404,6 @@ def create_issue(project_id: int, title: str, description: str, priority: str,
         """,
         (project_id, title.strip(), description.strip(), priority.strip(), reporter_id, assignee_id, due_date),
     )
-
 
 def get_issue_view(issue_id: int) -> Optional[sqlite3.Row]:
     return db_read_one(
@@ -373,7 +420,6 @@ def get_issue_view(issue_id: int) -> Optional[sqlite3.Row]:
         (issue_id,),
     )
 
-
 def get_issue_compact(issue_id: int) -> Optional[sqlite3.Row]:
     return db_read_one(
         """
@@ -385,7 +431,6 @@ def get_issue_compact(issue_id: int) -> Optional[sqlite3.Row]:
         """,
         (issue_id,),
     )
-
 
 def close_issue(issue_id: int) -> None:
     db_write(
@@ -417,7 +462,6 @@ def list_issue_files(issue_id: int) -> list[sqlite3.Row]:
 def get_issue_file(file_id: int) -> Optional[sqlite3.Row]:
     return db_read_one("SELECT * FROM issue_files WHERE id=?", (file_id,))
 
-
 def set_issue_status(issue_id: int, new_status: str) -> None:
     if new_status == "closed":
         db_write(
@@ -429,7 +473,6 @@ def set_issue_status(issue_id: int, new_status: str) -> None:
             "UPDATE issues SET status=?, closed_at=NULL, updated_at=datetime('now') WHERE id=?",
             (new_status, issue_id),
         )
-
 
 def get_issue_notify_recipient(issue_id: int, actor_user_id: int) -> Optional[sqlite3.Row]:
     """
@@ -466,6 +509,13 @@ def update_issue_due_date(issue_id: int, due_date: str) -> None:
         "UPDATE issues SET due_date=?, updated_at=datetime('now') WHERE id=?",
         (due_date, issue_id),
     )
+
+def set_issue_assignee(issue_id: int, assignee_id: Optional[int]) -> None:
+    db_write(
+        "UPDATE issues SET assignee_id=?, updated_at=datetime('now') WHERE id=?",
+        (assignee_id, issue_id),
+    )
+    
 # -------------------------------------------------------
 # Comments
 # -------------------------------------------------------

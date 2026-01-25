@@ -1,6 +1,7 @@
 # app.py
 from datetime import date, timedelta
 from pathlib import Path
+import secrets
 import sqlite3
 import uuid
 
@@ -11,7 +12,7 @@ from flask import send_from_directory
 from werkzeug.utils import secure_filename
 from config import settings
 from TrackletDB import (
-    add_issue_file, add_role, deactivate_project, delete_project_hard, delete_role, ensure_default_roles, get_issue_file, get_issue_notify_recipient, init_db, bootstrap_if_empty,
+    add_issue_file, add_role, deactivate_project, delete_project_hard, delete_role, delete_user_cascade, ensure_default_roles, get_issue_file, get_issue_notify_recipient, get_my_tasks_history, init_db, bootstrap_if_empty,
 
     # users
     get_user_by_id, get_user_by_email, list_issue_files, list_roles_active, list_roles_admin,
@@ -19,7 +20,7 @@ from TrackletDB import (
 
     # projects
     list_projects_active, list_projects_admin, create_project,
-    get_project, list_project_issues, migrate_db, project_has_issues, role_in_use, search_issues, search_projects, set_issue_status, update_my_settings, update_project_github,
+    get_project, list_project_issues, migrate_db, project_has_issues, role_in_use, search_issues, search_projects, set_issue_assignee, set_issue_status, update_my_settings, update_project_github,
 
     # issues
     get_my_tasks, create_issue, get_issue_view, get_issue_compact, close_issue,
@@ -31,7 +32,7 @@ from TrackletDB import (
     log_issue_event,
 
     # generic (small permission check query)
-    db_read_one, update_user,
+    db_read_one, update_user, update_user_info,
 )
 
 from TrackletMailer import (
@@ -53,6 +54,15 @@ from TrackletGitHub import get_releases, get_tags
 app = Flask(__name__)
 app.secret_key = settings.SECRET_KEY
 
+app.config.update(
+    REMEMBER_COOKIE_DURATION=timedelta(days=14),  # or 30
+    REMEMBER_COOKIE_SECURE=True,   # True on HTTPS (Railway)
+    REMEMBER_COOKIE_HTTPONLY=True,
+    REMEMBER_COOKIE_SAMESITE="Lax",
+)
+
+app.config["REMEMBER_COOKIE_SECURE"] = not app.debug
+
 login_manager = LoginManager()
 login_manager.login_view = "login"
 login_manager.init_app(app)
@@ -63,6 +73,7 @@ def inject_settings():
 # -------------------------------------------------
 # User model
 # -------------------------------------------------
+
 class User(UserMixin):
     def __init__(self, row):
         self.id = str(row["id"])
@@ -70,6 +81,11 @@ class User(UserMixin):
         self.name = row["name"]
         self.role = row["role"]
         self.photo_path = row["photo_path"]
+        self._is_active = bool(row["is_active"])   #  IMPORTANT
+
+    @property
+    def is_active(self):
+        return self._is_active
 
 
 @login_manager.user_loader
@@ -100,18 +116,23 @@ def login():
         return redirect(url_for("my_tasks"))
     return render_template("login.html")
 
-
 @app.post("/login")
 def login_post():
     email = request.form.get("email", "").strip().lower()
     password = request.form.get("password", "")
+    remember = request.form.get("remember") == "1"
 
     row = get_user_by_email(email)
     if not row or not check_password_hash(row["password_hash"], password):
         flash("Invalid email or password", "error")
         return redirect(url_for("login"))
 
-    login_user(User(row))
+    # ✅ block inactive users (important for remember-me + security)
+    if not int(row["is_active"]):
+        flash("Your account is inactive. Contact admin.", "error")
+        return redirect(url_for("login"))
+
+    login_user(User(row), remember=remember)
     return redirect(url_for("my_tasks"))
 
 
@@ -134,9 +155,14 @@ def home():
 @app.get("/my-tasks")
 @login_required
 def my_tasks():
-    issues = get_my_tasks(int(current_user.id))
+    issues = get_my_tasks(int(current_user.id), include_closed=False)
     return render_template("my_tasks.html", issues=issues)
 
+@app.get("/my-tasks/history")
+@login_required
+def my_tasks_history():
+    issues = get_my_tasks_history(int(current_user.id))
+    return render_template("my_tasks_history.html", issues=issues)
 # -------------------------------------------------
 # Search
 # -------------------------------------------------
@@ -350,6 +376,8 @@ def issue_new_post():
 @login_required
 def issue_view(issue_id: int):
     issue = get_issue_view(issue_id)
+    users = list_users_active()
+
     if not issue:
         abort(404)
 
@@ -358,6 +386,7 @@ def issue_view(issue_id: int):
         "issue_view.html",
         issue=issue,
         comments=list_comments(issue_id),
+        users=users,
         files=files,
         mail_enabled=mail_is_configured(),
     )
@@ -528,57 +557,39 @@ def _notify_other_party(issue_row, actor_user, message: str, kind: str, new_stat
 
 
 
-@app.post("/issues/<int:issue_id>/status")
+@app.post("/issues/<int:issue_id>/assignee")
 @login_required
-def issue_set_status(issue_id: int):
-    """
-    Change issue status (open/closed/in_progress/blocked).
-    Optional note: if provided, it is stored as a comment.
-    Notify the other party (reporter <-> assignee) when reporter/assignee changes status,
-    and include the note if provided.
-    """
-    new_status = (request.form.get("status") or "").strip()
-    note = (request.form.get("note") or "").strip()
-
-    if new_status not in ("open", "closed", "in_progress", "blocked"):
-        flash("Invalid status", "error")
-        return redirect(url_for("issue_view", issue_id=issue_id))
-
-    # Ensure issue exists (also used for email)
-    issue_before = get_issue_view(issue_id)
-    if not issue_before:
+def issue_set_assignee(issue_id: int):
+    issue = get_issue_view(issue_id)
+    if not issue:
         abort(404)
 
-    # DB: update status
-    set_issue_status(issue_id, new_status)
-    log_issue_event(issue_id, int(current_user.id), "status_changed", meta_json=new_status)
+    assignee_raw = (request.form.get("assignee_id") or "").strip()
+    assignee_id = int(assignee_raw) if assignee_raw.isdigit() else None
 
-    # DB: store note as a comment (optional)
-    if note:
-        add_comment(issue_id, int(current_user.id), note)
-        log_issue_event(issue_id, int(current_user.id), "status_note_added")
+    # DB update
+    set_issue_assignee(issue_id, assignee_id)
+    log_issue_event(issue_id, int(current_user.id), "assignee_changed")
 
-    # Notify reporter/assignee counterpart (DB decides recipient)
-    recipient = get_issue_notify_recipient(issue_id, int(current_user.id))
+    # Notify new assignee (if exists and mail configured)
+    if assignee_id and mail_is_configured():
+        assignee = get_user_by_id(assignee_id)
+        if assignee:
+            try:
+                issue_url = f"{request.url_root.rstrip('/')}{url_for('issue_view', issue_id=issue_id)}"
+                send_issue_assigned(
+                    to=assignee["email"],
+                    recipient_name=assignee["name"],
+                    issue_id=int(issue["id"]),
+                    title=issue["title"],
+                    project_name=issue["project_name"],
+                    assigner_name=current_user.name,
+                    issue_url=issue_url,
+                )
+            except MailerError as e:
+                flash(f"Assignee updated, email failed: {e}", "error")
 
-    if recipient and mail_is_configured():
-        try:
-            issue_url = f"{request.url_root.rstrip('/')}{url_for('issue_view', issue_id=issue_id)}"
-            send_issue_status_changed(
-                to=recipient["email"],
-                recipient_name=recipient["name"],
-                issue_id=int(issue_before["id"]),
-                title=issue_before["title"],
-                actor_name=current_user.name,
-                new_status=new_status,
-                note_text=note,
-                issue_url=issue_url,
-            )
-            log_issue_event(issue_id, int(current_user.id), "status_email_sent", meta_json=new_status)
-        except MailerError as e:
-            flash(f"Status updated, email failed: {e}", "error")
-
-    flash("Status updated", "success")
+    flash("Assignee updated", "success")
     return redirect(url_for("issue_view", issue_id=issue_id))
 
 
@@ -808,6 +819,41 @@ def my_settings_post():
     flash("Settings updated", "success")
     return redirect(url_for("my_settings"))
 
+@app.post("/admin/users/<int:user_id>/welcome")
+@login_required
+def admin_send_welcome(user_id: int):
+    if not is_admin():
+        abort(403)
+
+    user = get_user_by_id(user_id)
+    if not user:
+        abort(404)
+
+    # Generate a new temporary password
+    temp_password = secrets.token_urlsafe(8)
+    pwd_hash = generate_password_hash(temp_password)
+
+    # Update user info (example: ensure active + reset password)
+    update_user_info(
+        user_id=user_id,
+        name=user["name"] or "User",
+        email=user["email"],
+        role=user["role"],
+        password_hash=pwd_hash,
+    )
+
+    # Send welcome email
+    if mail_is_configured():
+        login_url = f"{request.url_root.rstrip('/')}{url_for('login')}"
+        send_welcome_user(
+            to=user["email"],
+            name=user["name"] or "User",
+            temp_password=temp_password,
+            login_url=login_url,
+        )
+
+    flash("User updated and welcome email sent", "success")
+    return redirect(url_for("admin_users"))
 
 # -------------------------------------------------
 # Health (optional)

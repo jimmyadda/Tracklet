@@ -31,6 +31,7 @@
     <div class="muted" style="font-size:12px;">
       User can change password later (Settings coming soon).
     </div>
+
   </form>
 </div>
 
@@ -79,6 +80,9 @@
                   Edit
                 </button>
 
+            <form method="post" action="{{ url_for('admin_send_welcome', user_id=u.id) }}">
+  <button class="btn btn-small">Send welcome</button>
+</form>
                 <form method="post"
                       action="{{ url_for('admin_user_delete', user_id=u.id) }}"
                       class="inline-form"
@@ -167,6 +171,7 @@
         <input name="password" id="eu_pwd" placeholder="Leave empty to keep current password">
 
         <button class="btn btn-primary" type="submit" style="margin-bottom:0;">Save</button>
+
       </form>
     </div>
   </div>

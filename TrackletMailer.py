@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import smtplib
 from email.message import EmailMessage
+import ssl
 from typing import Optional
 
 from config import settings
@@ -24,6 +25,7 @@ def is_configured() -> bool:
     )
 
 
+
 def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = None) -> None:
     if not is_configured():
         raise MailerError("SMTP not configured")
@@ -37,14 +39,26 @@ def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = N
     msg.set_content(body)
 
     try:
-        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as s:
-            s.ehlo()
-            s.starttls()
-            s.ehlo()
-            s.login(settings.SMTP_USER, settings.SMTP_PASS)
-            s.send_message(msg)
+        port = int(settings.SMTP_PORT)
+
+        if port == 465:
+            # SSL (smtps)
+            context = ssl.create_default_context()
+            with smtplib.SMTP_SSL(settings.SMTP_HOST, port, timeout=30, context=context) as s:
+                s.login(settings.SMTP_USER, settings.SMTP_PASS)
+                s.send_message(msg)
+        else:
+            # STARTTLS (587)
+            with smtplib.SMTP(settings.SMTP_HOST, port, timeout=30) as s:
+                s.ehlo()
+                context = ssl.create_default_context()
+                s.starttls(context=context)
+                s.ehlo()
+                s.login(settings.SMTP_USER, settings.SMTP_PASS)
+                s.send_message(msg)
+
     except Exception as e:
-        raise MailerError(str(e)) from e
+        raise MailerError(repr(e)) from e
 
 
 # ----------------------------
@@ -52,24 +66,30 @@ def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = N
 # ----------------------------
 
 def send_issue_assigned(
-    *,
     to: str,
-    assignee_name: str,
+    recipient_name: str,
     issue_id: int,
     title: str,
-    priority: str,
+    project_name: str,
+    assigner_name: str,
     issue_url: str,
-) -> None:
-    subject = f"New Issue Assigned: #{issue_id} – {title}"
-    body = (
-        f"Hi {assignee_name},\n\n"
-        f"A new issue was assigned to you.\n\n"
-        f"Issue #{issue_id}: {title}\n"
-        f"Priority: {priority}\n"
-        f"Status: open\n\n"
-        f"Open issue:\n{issue_url}\n"
-    )
-    send_email(to, subject, body)
+):
+    subject = f"[Tracklet] Issue assigned to you: #{issue_id}"
+    body = f"""
+Hi {recipient_name},
+
+{assigner_name} assigned you a Tracklet issue.
+
+Issue: #{issue_id} — {title}
+Project: {project_name}
+
+Open:
+{issue_url}
+
+Thanks,
+Tracklet
+"""
+    send_email(to=to, subject=subject, body=body)
 
 
 def send_issue_reminder(

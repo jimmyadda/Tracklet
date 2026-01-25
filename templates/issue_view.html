@@ -1,5 +1,19 @@
 {% extends "layout.html" %}
 {% block content %}
+
+
+<style>
+  .assignee-form{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+.assignee-form select{
+  flex:1;
+  margin-bottom:0;
+}
+
+</style>
   <div class="header">
     <div>
       <h1>#{{ issue.id }} — {{ issue.title }}</h1>
@@ -27,7 +41,23 @@
       <div class="kv">
         <div><span class="k">Status</span> <span class="pill">{{ issue.status }}</span></div>
         <div><span class="k">Priority</span> <span class="pill pri pri-{{ issue.priority }}">{{ issue.priority }}</span></div>
-        <div><span class="k">Assignee</span> {{ issue.assignee_name or "(none)" }}</div>
+        <div class="card">
+  <div class="card-title">Assignee</div>
+
+  <form method="post" action="{{ url_for('issue_set_assignee', issue_id=issue.id) }}" class="assignee-form">
+    <select name="assignee_id">
+      <option value="">— Unassigned —</option>
+      {% for u in users %}
+        <option value="{{ u.id }}" {% if issue.assignee_id == u.id %}selected{% endif %}>
+          {{ u.name }} ({{ u.email }})
+        </option>
+      {% endfor %}
+    </select>
+
+    <button class="btn btn-primary" type="submit" style="margin-bottom:0;">Update</button>
+  </form>
+</div>
+
       </div>
       <hr>
       <div class="desc">{{ issue.description or "No description." }}</div>

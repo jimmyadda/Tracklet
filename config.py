@@ -35,7 +35,7 @@ class Settings:
 
     # Mail (set only what you need)
     SMTP_HOST: str = _env("SMTP_HOST", "smtp.gmail.com")
-    SMTP_PORT: int = _env_int("SMTP_PORT", 587)
+    SMTP_PORT: int = _env_int("SMTP_PORT", 465)
     SMTP_USER: str = _env("SMTP_USER", "Avivimmantis@gmail.com")
     SMTP_PASS: str = _env("SMTP_PASS", "ycbn ddss uepq xtyb")
     SMTP_FROM: str = _env("SMTP_FROM", "Avivimmantis@gmail.com")  # if empty, fallback to SMTP_USER
