@@ -51,6 +51,7 @@ def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = N
                     "to": [to],
                     "subject": subject,
                     "text": body,
+                    "reply_to": "Avivimmantis@gmail.com"
                 },
                 timeout=30,
             )

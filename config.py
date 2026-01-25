@@ -45,7 +45,7 @@ class Settings:
 
     @property
     def SMTP_FROM(self) -> str:
-        return _env("SMTP_FROM", "no-reply@tracklet.app")
+        return _env("SMTP_FROM", "no-reply@trackletapp.org")
 
     @property
     def SMTP_HOST(self) -> str:
