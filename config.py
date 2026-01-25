@@ -34,7 +34,36 @@ class Settings:
     UPLOAD_DIR: str = _env("UPLOAD_DIR", "data/uploads")
 
     # Mail 
-    MAIL_PROVIDER: str = _env("MAIL_PROVIDER", "smtp")
+     # ---- Mail (dynamic) ----
+    @property
+    def MAIL_PROVIDER(self) -> str:
+        return _env("MAIL_PROVIDER", "smtp")
+
+    @property
+    def RESEND_API_KEY(self) -> str:
+        return _env("RESEND_API_KEY", "")
+
+    @property
+    def SMTP_FROM(self) -> str:
+        return _env("SMTP_FROM", "no-reply@tracklet.app")
+
+    @property
+    def SMTP_HOST(self) -> str:
+        return _env("SMTP_HOST", "")
+
+    @property
+    def SMTP_PORT(self) -> int:
+        return _env_int("SMTP_PORT", 587)
+
+    @property
+    def SMTP_USER(self) -> str:
+        return _env("SMTP_USER", "")
+
+    @property
+    def SMTP_PASS(self) -> str:
+        return _env("SMTP_PASS", "")
+    
+    """ MAIL_PROVIDER: str = _env("MAIL_PROVIDER", "smtp")
     # Resend
     RESEND_API_KEY: str = _env("RESEND_API_KEY", "")    
     SMTP_HOST: str = _env("SMTP_HOST", "")
@@ -43,7 +72,7 @@ class Settings:
     #SMTP_PASS: str = _env("SMTP_PASS", "ycbn ddss uepq xtyb")
     SMTP_PASS: str = _env("SMTP_PASS", "")
     #SMTP_FROM: str = _env("SMTP_FROM", "Avivimmantis@gmail.com")  # if empty, fallback to SMTP_USER
-    SMTP_FROM: str = _env("SMTP_FROM", "no-reply@tracklet.app")  # if empty, fallback to SMTP_USER
+    SMTP_FROM: str = _env("SMTP_FROM", "no-reply@tracklet.app")  # if empty, fallback to SMTP_USER """
 
     # Bootstrap admin (only used if DB is empty)
     BOOTSTRAP_ADMIN_EMAIL: str = _env("BOOTSTRAP_ADMIN_EMAIL", "admin@local")

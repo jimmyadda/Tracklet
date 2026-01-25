@@ -20,16 +20,10 @@ def _provider() -> str:
     return (settings.MAIL_PROVIDER or "smtp").strip().lower()
 
 def is_configured() -> bool:
-    p = _provider()
-    if p == "resend":
-        return bool(settings.RESEND_API_KEY) and bool(settings.SMTP_FROM or settings.SMTP_USER)
+    if settings.MAIL_PROVIDER.lower() == "resend":
+        return bool(settings.RESEND_API_KEY) and bool(settings.SMTP_FROM)
+    return bool(settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASS and (settings.SMTP_FROM or settings.SMTP_USER))
 
-    return bool(
-        settings.SMTP_HOST
-        and settings.SMTP_USER
-        and settings.SMTP_PASS
-        and (settings.SMTP_FROM or settings.SMTP_USER)
-    )
 
 def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = None) -> None:
 
