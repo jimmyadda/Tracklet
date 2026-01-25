@@ -42,7 +42,9 @@ class Settings:
     SMTP_USER: str = _env("SMTP_USER", "")
     #SMTP_PASS: str = _env("SMTP_PASS", "ycbn ddss uepq xtyb")
     SMTP_PASS: str = _env("SMTP_PASS", "")
-    SMTP_FROM: str = _env("SMTP_FROM", "Avivimmantis@gmail.com")  # if empty, fallback to SMTP_USER
+    #SMTP_FROM: str = _env("SMTP_FROM", "Avivimmantis@gmail.com")  # if empty, fallback to SMTP_USER
+
+    SMTP_FROM: str = _env("SMTP_FROM", "no-reply@tracklet.app")  # if empty, fallback to SMTP_USER
 
     # Bootstrap admin (only used if DB is empty)
     BOOTSTRAP_ADMIN_EMAIL: str = _env("BOOTSTRAP_ADMIN_EMAIL", "admin@local")
