@@ -36,7 +36,7 @@ class Settings:
     # Mail (set only what you need)
     MAIL_PROVIDER: str = _env("MAIL_PROVIDER", "smtp")
     # Resend
-    RESEND_API_KEY: str = _env("RESEND_API_KEY", "re_5Jrs4kNN_7ujDLRxanwJkV5ouWbMqoQj6")    
+    RESEND_API_KEY: str = _env("RESEND_API_KEY", "")    
     SMTP_HOST: str = _env("SMTP_HOST", "smtp.gmail.com")
     SMTP_PORT: int = _env_int("SMTP_PORT", 587)
     SMTP_USER: str = _env("SMTP_USER", "")

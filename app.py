@@ -829,11 +829,9 @@ def admin_send_welcome(user_id: int):
     if not user:
         abort(404)
 
-    # Generate a new temporary password
     temp_password = secrets.token_urlsafe(8)
     pwd_hash = generate_password_hash(temp_password)
 
-    # Update user info (example: ensure active + reset password)
     update_user_info(
         user_id=user_id,
         name=user["name"] or "User",
@@ -842,17 +840,22 @@ def admin_send_welcome(user_id: int):
         password_hash=pwd_hash,
     )
 
-    # Send welcome email
-    if mail_is_configured():
-        login_url = f"{request.url_root.rstrip('/')}{url_for('login')}"
+    if not mail_is_configured():
+        flash("User updated, but mail is not configured", "warning")
+        return redirect(url_for("admin_users"))
+
+    login_url = f"{request.url_root.rstrip('/')}{url_for('login')}"
+    try:
         send_welcome_user(
             to=user["email"],
             name=user["name"] or "User",
             temp_password=temp_password,
             login_url=login_url,
         )
+        flash("User updated and welcome email sent ✅", "success")
+    except Exception as e:
+        flash(f"User updated but email failed: {e}", "danger")
 
-    flash("User updated and welcome email sent", "success")
     return redirect(url_for("admin_users"))
 
 # -------------------------------------------------
