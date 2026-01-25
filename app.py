@@ -871,7 +871,17 @@ def health():
         "mail_configured": mail_is_configured(),
     }
 
-
+@app.get("/admin/mail-debug")
+@login_required
+def admin_mail_debug():
+    if not is_admin():
+        abort(403)
+    return {
+        "MAIL_PROVIDER": settings.MAIL_PROVIDER,
+        "RESEND_KEY_SET": bool(settings.RESEND_API_KEY),
+        "SMTP_FROM": settings.SMTP_FROM,
+        "MAIL_CONFIGURED": mail_is_configured(),
+    }
 if __name__ == "__main__":
     import os
     port = int(os.environ.get("PORT", 8080))
