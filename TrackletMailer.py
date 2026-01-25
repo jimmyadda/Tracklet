@@ -42,6 +42,9 @@ def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = N
     # --- Resend (HTTPS) ---
     if p == "resend":
         api_key = os.getenv("RESEND_API_KEY")
+        if not api_key:
+            raise MailerError("RESEND_API_KEY missing")
+
         try:
             r = requests.post(
                 "https://api.resend.com/emails",
@@ -57,9 +60,13 @@ def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = N
                 },
                 timeout=30,
             )
+
+            print(f"[MAIL] Resend to={to} subject={subject} status={r.status_code}")
+
             if r.status_code >= 400:
                 raise MailerError(f"Resend error {r.status_code}: {r.text}")
             return
+
         except Exception as e:
             raise MailerError(repr(e)) from e
 
@@ -90,6 +97,7 @@ def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = N
 
     except Exception as e:
         raise MailerError(repr(e)) from e
+
 
 
 # ----------------------------
