@@ -17,8 +17,7 @@ class MailerError(RuntimeError):
     pass
 
 def _provider() -> str:
-    return (os.getenv("MAIL_PROVIDER") or "smtp").strip().lower()
-
+    return (settings.MAIL_PROVIDER or "smtp").strip().lower()
 
 def is_configured() -> bool:
     p = _provider()
@@ -33,6 +32,16 @@ def is_configured() -> bool:
     )
 
 def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = None) -> None:
+    print(
+    "[MAIL DEBUG]",
+    "provider=", settings.MAIL_PROVIDER,
+    "provider_func=", _provider(),
+    "resend_key_set=", bool(settings.RESEND_API_KEY),
+    "smtp_from=", settings.SMTP_FROM,
+    "smtp_user=", settings.SMTP_USER,
+    "smtp_host=", settings.SMTP_HOST,
+    "smtp_port=", settings.SMTP_PORT,
+)
     if not is_configured():
         raise MailerError("Mailer not configured")
 
