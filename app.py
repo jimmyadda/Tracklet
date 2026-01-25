@@ -2,6 +2,7 @@
 from datetime import date, timedelta
 from pathlib import Path
 import secrets
+import shutil
 import sqlite3
 import uuid
 
@@ -74,6 +75,18 @@ def inject_settings():
 # User model
 # -------------------------------------------------
 
+
+
+db_path = os.environ.get("DB_PATH", "data/tracklet.sqlite3")
+seed_path = "data/seed_tracklet.sqlite3"
+
+if db_path.startswith("/data/") and not os.path.exists(db_path) and os.path.exists(seed_path):
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    shutil.copy2(seed_path, db_path)
+    print(f"✅ Seeded DB to {db_path}", flush=True)
+
+
+    
 class User(UserMixin):
     def __init__(self, row):
         self.id = str(row["id"])
