@@ -75,7 +75,8 @@ def inject_settings():
 # User model
 # -------------------------------------------------
 
-
+import os
+import shutil
 
 db_path = os.environ.get("DB_PATH", "data/tracklet.sqlite3")
 seed_path = "data/seed_tracklet.sqlite3"
