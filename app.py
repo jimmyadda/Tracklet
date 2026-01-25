@@ -882,6 +882,17 @@ def admin_mail_debug():
         "SMTP_FROM": settings.SMTP_FROM,
         "MAIL_CONFIGURED": mail_is_configured(),
     }
+
+@app.get("/admin/env-debug")
+@login_required
+def admin_env_debug():
+    if not is_admin():
+        abort(403)
+
+    keys = ["MAIL_PROVIDER", "RESEND_API_KEY", "SMTP_FROM", "BASE_URL", "DB_PATH"]
+    return {k: ("<set>" if os.getenv(k) else None) if k == "RESEND_API_KEY" else os.getenv(k) for k in keys}
+
+
 if __name__ == "__main__":
     import os
     port = int(os.environ.get("PORT", 8080))

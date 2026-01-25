@@ -33,17 +33,16 @@ class Settings:
     # Recommended: UPLOAD_DIR=/data/uploads
     UPLOAD_DIR: str = _env("UPLOAD_DIR", "data/uploads")
 
-    # Mail (set only what you need)
+    # Mail 
     MAIL_PROVIDER: str = _env("MAIL_PROVIDER", "smtp")
     # Resend
     RESEND_API_KEY: str = _env("RESEND_API_KEY", "")    
-    SMTP_HOST: str = _env("SMTP_HOST", "smtp.gmail.com")
-    SMTP_PORT: int = _env_int("SMTP_PORT", 587)
+    SMTP_HOST: str = _env("SMTP_HOST", "")
+    SMTP_PORT: int = _env_int("SMTP_PORT", "")
     SMTP_USER: str = _env("SMTP_USER", "")
     #SMTP_PASS: str = _env("SMTP_PASS", "ycbn ddss uepq xtyb")
     SMTP_PASS: str = _env("SMTP_PASS", "")
     #SMTP_FROM: str = _env("SMTP_FROM", "Avivimmantis@gmail.com")  # if empty, fallback to SMTP_USER
-
     SMTP_FROM: str = _env("SMTP_FROM", "no-reply@tracklet.app")  # if empty, fallback to SMTP_USER
 
     # Bootstrap admin (only used if DB is empty)
