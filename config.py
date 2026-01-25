@@ -34,10 +34,14 @@ class Settings:
     UPLOAD_DIR: str = _env("UPLOAD_DIR", "data/uploads")
 
     # Mail (set only what you need)
+    MAIL_PROVIDER: str = _env("MAIL_PROVIDER", "smtp")
+    # Resend
+    RESEND_API_KEY: str = _env("RESEND_API_KEY", "re_5Jrs4kNN_7ujDLRxanwJkV5ouWbMqoQj6")    
     SMTP_HOST: str = _env("SMTP_HOST", "smtp.gmail.com")
-    SMTP_PORT: int = _env_int("SMTP_PORT", 465)
-    SMTP_USER: str = _env("SMTP_USER", "Avivimmantis@gmail.com")
-    SMTP_PASS: str = _env("SMTP_PASS", "ycbn ddss uepq xtyb")
+    SMTP_PORT: int = _env_int("SMTP_PORT", 587)
+    SMTP_USER: str = _env("SMTP_USER", "")
+    #SMTP_PASS: str = _env("SMTP_PASS", "ycbn ddss uepq xtyb")
+    SMTP_PASS: str = _env("SMTP_PASS", "")
     SMTP_FROM: str = _env("SMTP_FROM", "Avivimmantis@gmail.com")  # if empty, fallback to SMTP_USER
 
     # Bootstrap admin (only used if DB is empty)
