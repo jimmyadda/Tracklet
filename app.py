@@ -47,6 +47,7 @@ from TrackletMailer import (
 )
 
 from TrackletGitHub import get_releases, get_tags
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 
 # -------------------------------------------------
@@ -54,10 +55,18 @@ from TrackletGitHub import get_releases, get_tags
 # -------------------------------------------------
 app = Flask(__name__)
 app.secret_key = settings.SECRET_KEY
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
 
 app.config.update(
-    REMEMBER_COOKIE_DURATION=timedelta(days=14),  # or 30
-    REMEMBER_COOKIE_SECURE=True,   # True on HTTPS (Railway)
+    # ---- Session cookie (MAIN login cookie) ----
+    SESSION_COOKIE_SECURE=True,        # HTTPS only
+    SESSION_COOKIE_HTTPONLY=True,      # Not accessible via JS
+    SESSION_COOKIE_SAMESITE="Lax",     # Safe default
+
+    # ---- Remember-me cookie (Flask-Login) ----
+    REMEMBER_COOKIE_DURATION=timedelta(days=14),
+    REMEMBER_COOKIE_SECURE=True,
     REMEMBER_COOKIE_HTTPONLY=True,
     REMEMBER_COOKIE_SAMESITE="Lax",
 )
