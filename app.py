@@ -16,7 +16,7 @@ from TrackletDB import (
     add_issue_file, add_role, deactivate_project, delete_project_hard, delete_role, delete_user_cascade, ensure_default_roles, get_issue_file, get_issue_notify_recipient, get_my_tasks_history, get_project_name, init_db, bootstrap_if_empty,
 
     # users
-    get_user_by_id, get_user_by_email, list_issue_files, list_issue_watchers, list_roles_active, list_roles_admin,
+    get_user_by_id, get_user_by_email, list_issue_files,  list_roles_active, list_roles_admin,
     list_users_active, list_users_admin, create_user,
 
     # projects
