@@ -94,6 +94,65 @@ def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = N
     except Exception as e:
         raise MailerError(repr(e)) from e
 
+# ----------------------------
+# Issues Watcher
+# ----------------------------
+
+def send_issue_created_watcher(
+    to: str,
+    watcher_name: str,
+    issue_id: int,
+    title: str,
+    project_name: str,
+    creator_name: str,
+    issue_url: str,
+):
+    subject = f"[Tracklet] New issue #{issue_id}"
+    body = f"""Hi {watcher_name},
+
+A new issue was created.
+
+Issue: #{issue_id} — {title}
+Project: {project_name}
+Created by: {creator_name}
+
+Open:
+{issue_url}
+
+Thanks,
+Tracklet
+"""
+    send_email(to=to, subject=subject, body=body)
+
+
+def send_issue_status_watcher(
+    to: str,
+    watcher_name: str,
+    issue_id: int,
+    title: str,
+    project_name: str,
+    actor_name: str,
+    new_status: str,
+    issue_url: str,
+):
+    subject = f"[Tracklet] Issue #{issue_id} status changed"
+    body = f"""Hi {watcher_name},
+
+Issue status changed.
+
+Issue: #{issue_id} — {title}
+Project: {project_name}
+Changed by: {actor_name}
+New status: {new_status}
+
+Open:
+{issue_url}
+
+Thanks,
+Tracklet
+"""
+    send_email(to=to, subject=subject, body=body)
+
 
 
 # ----------------------------

@@ -94,6 +94,26 @@
     {% endfor %}
   </div>
 </div>
+
+<div class="card">
+  <div class="card-title">Watcher</div>
+
+  <form method="post" action="{{ url_for('issue_set_watcher', issue_id=issue.id) }}" class="assignee-form">
+    <select name="watcher_id">
+      <option value="">— none —</option>
+      {% for u in users %}
+        <option value="{{ u.id }}" {% if issue.watcher_id == u.id %}selected{% endif %}>
+          {{ u.name }} ({{ u.email }})
+        </option>
+      {% endfor %}
+    </select>
+    <button class="btn btn-primary" type="submit" style="margin-bottom:0;">Update</button>
+  </form>
+
+  <div class="muted" style="margin-top:8px;">
+    Watcher receives emails on: <b>issue created</b>, <b>status change</b> (no comments/notes).
+  </div>
+</div>
     </div>
 
 <div class="card">

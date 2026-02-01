@@ -46,6 +46,13 @@
         </div>
       </div>
 
+      <label class="label">Watcher (optional)</label>
+        <select name="watcher_id">
+          <option value="">— none —</option>
+          {% for u in users %}
+            <option value="{{ u.id }}">{{ u.name }} ({{ u.email }})</option>
+          {% endfor %}
+        </select>
       <button class="btn btn-primary" type="submit">Create</button>
     </form>
   </div>

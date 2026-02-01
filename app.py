@@ -13,15 +13,15 @@ from flask import send_from_directory
 from werkzeug.utils import secure_filename
 from config import settings
 from TrackletDB import (
-    add_issue_file, add_role, deactivate_project, delete_project_hard, delete_role, delete_user_cascade, ensure_default_roles, get_issue_file, get_issue_notify_recipient, get_my_tasks_history, init_db, bootstrap_if_empty,
+    add_issue_file, add_role, deactivate_project, delete_project_hard, delete_role, delete_user_cascade, ensure_default_roles, get_issue_file, get_issue_notify_recipient, get_my_tasks_history, get_project_name, init_db, bootstrap_if_empty,
 
     # users
-    get_user_by_id, get_user_by_email, list_issue_files, list_roles_active, list_roles_admin,
+    get_user_by_id, get_user_by_email, list_issue_files, list_issue_watchers, list_roles_active, list_roles_admin,
     list_users_active, list_users_admin, create_user,
 
     # projects
     list_projects_active, list_projects_admin, create_project,
-    get_project, list_project_issues, migrate_db, project_has_issues, role_in_use, search_issues, search_projects, set_issue_assignee, set_issue_status, update_my_settings, update_project_github,
+    get_project, list_project_issues, migrate_db, project_has_issues, role_in_use, search_issues, search_projects, set_issue_assignee, set_issue_status, set_issue_watcher, update_my_settings, update_project_github,
 
     # issues
     get_my_tasks, create_issue, get_issue_view, get_issue_compact, close_issue,
@@ -39,10 +39,12 @@ from TrackletDB import (
 from TrackletMailer import (
     send_issue_assigned,
     send_issue_comment,
+    send_issue_created_watcher,
     send_issue_reminder,
     MailerError,
     is_configured as mail_is_configured,
     send_issue_status_changed,
+    send_issue_status_watcher,
     send_welcome_user,
 )
 
@@ -345,10 +347,15 @@ def issue_new_post():
 
     assignee_id = request.form.get("assignee_id") or None
     assignee_id = int(assignee_id) if assignee_id else None
+    watcher_raw = (request.form.get("watcher_id") or "").strip()
+    watcher_id = int(watcher_raw) if watcher_raw.isdigit() else None
 
     # 1) create issue
     issue_id = create_issue(project_id, title, description, priority, int(current_user.id), assignee_id, due_date)
-
+    if watcher_id:
+        set_issue_watcher(issue_id, watcher_id)
+        log_issue_event(issue_id, int(current_user.id), "watcher_set_on_create")
+    
     # 2) optional attachment on create
     f = request.files.get("file")
     if f and f.filename:
@@ -379,17 +386,20 @@ def issue_new_post():
         assignee = get_user_by_id(assignee_id)
         if assignee and mail_is_configured():
             try:
+                issue_url = f"{request.url_root.rstrip('/')}{url_for('issue_view', issue_id=issue_id)}"
                 send_issue_assigned(
                     to=assignee["email"],
-                    assignee_name=assignee["name"],
+                    recipient_name=assignee["name"],
                     issue_id=issue_id,
                     title=title,
-                    priority=priority,
-                    issue_url=f"{request.url_root.rstrip('/')}{url_for('issue_view', issue_id=issue_id)}",
+                    project_name=get_project_name(project_id),  # or issue["project_name"] if you have it
+                    assigner_name=current_user.name,
+                    issue_url=issue_url,
                 )
                 log_issue_event(issue_id, int(current_user.id), "assigned_email_sent")
             except MailerError as e:
                 flash(f"Issue created, email failed: {e}", "error")
+    _notify_single_watcher_created(issue_id)
 
     flash("Issue created", "success")
     return redirect(url_for("issue_view", issue_id=issue_id))
@@ -462,8 +472,6 @@ def issue_add_comment(issue_id: int):
     flash("Comment added", "success")
     return redirect(url_for("issue_view", issue_id=issue_id))
 
-
-
 @app.post("/issues/<int:issue_id>/close")
 @login_required
 def issue_close(issue_id: int):
@@ -478,10 +486,10 @@ def issue_close(issue_id: int):
         abort(403)
 
     close_issue(issue_id)
+    _notify_single_watcher_status(issue_id, "issue_closed")
     log_issue_event(issue_id, int(current_user.id), "issue_closed")
     flash("Issue closed", "success")
     return redirect(url_for("issue_view", issue_id=issue_id))
-
 
 @app.post("/issues/<int:issue_id>/remind")
 @login_required
@@ -524,61 +532,6 @@ def issue_remind(issue_id: int):
 
     return redirect(url_for("issue_view", issue_id=issue_id))
 
-def _notify_other_party(issue_row, actor_user, message: str, kind: str, new_status: str | None = None):
-    """
-    kind = "comment" | "status"
-    """
-    if not mail_is_configured():
-        return
-    if not issue_row:
-        return
-
-    reporter_id = int(issue_row["reporter_id"])
-    assignee_id = issue_row["assignee_id"]
-    assignee_id = int(assignee_id) if assignee_id is not None else None
-
-    # Determine recipient:
-    if actor_user.id == reporter_id:
-        # reporter -> assignee
-        if not assignee_id:
-            return
-        recipient = get_user_by_id(assignee_id)
-    elif assignee_id and actor_user.id == assignee_id:
-        # assignee -> reporter
-        recipient = get_user_by_id(reporter_id)
-    else:
-        # watchers later; for now only reporter/assignee logic
-        return
-
-    if not recipient:
-        return
-
-    issue_url = f"{request.url_root.rstrip('/')}{url_for('issue_view', issue_id=issue_row['id'])}"
-    actor_name = actor_user.name
-
-    if kind == "comment":
-        send_issue_comment(
-            to=recipient["email"],
-            recipient_name=recipient["name"],
-            issue_id=int(issue_row["id"]),
-            title=issue_row["title"],
-            actor_name=actor_name,
-            comment_text=message,
-            issue_url=issue_url,
-        )
-    elif kind == "status" and new_status:
-        send_issue_status_changed(
-            to=recipient["email"],
-            recipient_name=recipient["name"],
-            issue_id=int(issue_row["id"]),
-            title=issue_row["title"],
-            actor_name=actor_name,
-            new_status=new_status,
-            note_text=message or "",
-            issue_url=issue_url,
-        )
-
-
 
 @app.post("/issues/<int:issue_id>/assignee")
 @login_required
@@ -614,6 +567,92 @@ def issue_set_assignee(issue_id: int):
 
     flash("Assignee updated", "success")
     return redirect(url_for("issue_view", issue_id=issue_id))
+
+# -------------------------------------------------
+# Watcher
+# -------------------------------------------------
+
+@app.post("/issues/<int:issue_id>/watcher")
+@login_required
+def issue_set_watcher(issue_id: int):
+    watcher_raw = (request.form.get("watcher_id") or "").strip()
+    watcher_id = int(watcher_raw) if watcher_raw.isdigit() else None
+
+    set_issue_watcher(issue_id, watcher_id)
+    log_issue_event(issue_id, int(current_user.id), "watcher_changed")
+    flash("Watcher updated", "success")
+    return redirect(url_for("issue_view", issue_id=issue_id))
+
+
+
+def _notify_single_watcher_created(issue_id: int):
+    if not mail_is_configured():
+        return
+
+    issue = get_issue_view(issue_id)
+    if not issue or not issue["watcher_id"]:
+        return
+
+    watcher = get_user_by_id(int(issue["watcher_id"]))
+    if not watcher:
+        return
+
+    exclude_ids = {int(current_user.id), int(issue["reporter_id"])}
+    if issue["assignee_id"] is not None:
+        exclude_ids.add(int(issue["assignee_id"]))
+
+    if int(watcher["id"]) in exclude_ids:
+        return
+
+    issue_url = f"{request.url_root.rstrip('/')}{url_for('issue_view', issue_id=issue_id)}"
+    try:
+        send_issue_created_watcher(
+            to=watcher["email"],
+            watcher_name=watcher["name"],
+            issue_id=int(issue["id"]),
+            title=issue["title"],
+            project_name=issue["project_name"],
+            creator_name=current_user.name,
+            issue_url=issue_url,
+        )
+    except MailerError:
+        pass
+
+
+def _notify_single_watcher_status(issue_id: int, new_status: str):
+    if not mail_is_configured():
+        return
+
+    issue = get_issue_view(issue_id)
+    if not issue or not issue["watcher_id"]:
+        return
+
+    watcher = get_user_by_id(int(issue["watcher_id"]))
+    if not watcher:
+        return
+
+    exclude_ids = {int(current_user.id), int(issue["reporter_id"])}
+    if issue["assignee_id"] is not None:
+        exclude_ids.add(int(issue["assignee_id"]))
+
+    if int(watcher["id"]) in exclude_ids:
+        return
+
+    issue_url = f"{request.url_root.rstrip('/')}{url_for('issue_view', issue_id=issue_id)}"
+    try:
+        send_issue_status_watcher(
+            to=watcher["email"],
+            watcher_name=watcher["name"],
+            issue_id=int(issue["id"]),
+            title=issue["title"],
+            project_name=issue["project_name"],
+            actor_name=current_user.name,
+            new_status=new_status,
+            issue_url=issue_url,
+        )
+    except MailerError:
+        pass
+
 
 
 # -------------------------------------------------

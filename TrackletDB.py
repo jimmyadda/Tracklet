@@ -174,7 +174,7 @@ CREATE INDEX IF NOT EXISTS idx_issues_project ON issues(project_id, status);
 def init_db() -> None:
     with transaction() as cur:
         cur.executescript(SCHEMA_SQL)
-
+    migrate_add_watcher_id()
 
 # -------------------------------------------------------
 # Bootstrap
@@ -196,6 +196,14 @@ def bootstrap_if_empty() -> None:
     )
     db_write("INSERT INTO projects(name, description) VALUES (?,?)", ("General", "Default project"))
 
+
+def migrate_add_watcher_id() -> None:
+    with transaction() as cur:
+        cols = cur.execute("PRAGMA table_info(issues)").fetchall()
+        names = {c[1] for c in cols}
+        if "watcher_id" not in names:
+            cur.execute("ALTER TABLE issues ADD COLUMN watcher_id INTEGER;")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_issues_watcher ON issues(watcher_id);")
 # -------------------------------------------------------
 # Search
 # -------------------------------------------------------
@@ -266,6 +274,7 @@ def update_user(user_id: int, name: str, email: str, role: str, password_hash: s
             "UPDATE users SET name=?, email=?, role=? WHERE id=?",
             (name.strip(), email.strip().lower(), role.strip(), user_id),
         )
+
 def update_user_info(
     user_id: int,
     name: str,
@@ -291,6 +300,7 @@ def update_user_info(
             """,
             (name.strip(), email.strip().lower(), role.strip(), user_id),
         )
+
 def list_users_without_welcome() -> list[sqlite3.Row]:
     return db_read_all(
         """
@@ -515,6 +525,10 @@ def set_issue_assignee(issue_id: int, assignee_id: Optional[int]) -> None:
         "UPDATE issues SET assignee_id=?, updated_at=datetime('now') WHERE id=?",
         (assignee_id, issue_id),
     )
+
+def get_project_name(project_id: int) -> str:
+    row = db_read_one("SELECT name FROM projects WHERE id=?", (project_id,))
+    return row["name"] if row else "Project"
     
 # -------------------------------------------------------
 # Comments
@@ -558,6 +572,29 @@ def delete_role(name: str) -> None:
 def role_in_use(name: str) -> bool:
     row = db_read_one("SELECT 1 FROM users WHERE role=? LIMIT 1", (name.strip(),))
     return row is not None
+# -------------------------------------------------------
+# Watchers 
+# -------------------------------------------------------
+
+def set_issue_watcher(issue_id: int, watcher_id: Optional[int]) -> None:
+    db_write(
+        "UPDATE issues SET watcher_id=?, updated_at=datetime('now') WHERE id=?",
+        (watcher_id, issue_id),
+    )
+
+def get_issue_watcher_user(issue_id: int) -> Optional[sqlite3.Row]:
+    return db_read_one(
+        """
+        SELECT u.id, u.name, u.email
+        FROM issues i
+        JOIN users u ON u.id = i.watcher_id
+        WHERE i.id=? AND i.watcher_id IS NOT NULL
+        """,
+        (issue_id,),
+    )
+
+
+
 
 # -------------------------------------------------------
 # Events (audit)
