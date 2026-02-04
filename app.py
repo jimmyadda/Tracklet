@@ -501,42 +501,66 @@ def issue_close(issue_id: int):
     if issue["status"] == "closed":
         return redirect(url_for("issue_view", issue_id=issue_id))
 
-    # Only assignee or admin can close
-    if issue["assignee_id"] != int(current_user.id) and not is_admin():
+    actor_id = int(current_user.id)
+    reporter_id = int(issue["reporter_id"])
+    assignee_id = int(issue["assignee_id"]) if issue["assignee_id"] is not None else None
+
+    # Permission: assignee OR reporter OR admin
+    if (actor_id not in (reporter_id, assignee_id)) and not is_admin():
         abort(403)
 
     # 1) DB close
     set_issue_status(issue_id, "closed")
-    log_issue_event(issue_id, int(current_user.id), "issue_closed")
+    log_issue_event(issue_id, actor_id, "issue_closed")
 
     issue_url = f"{request.url_root.rstrip('/')}{url_for('issue_view', issue_id=issue_id)}"
 
-    # 2) Notify assignee (if exists, and it's not the actor)
-    # If assignee closes it themselves -> no need to email them.
-    assignee_id = issue["assignee_id"]
-    if assignee_id and mail_is_configured() and int(assignee_id) != int(current_user.id):
-        assignee = get_user_by_id(int(assignee_id))
-        if assignee:
-            try:
-                send_issue_status_changed(
-                    to=assignee["email"],
-                    recipient_name=assignee["name"],
-                    issue_id=int(issue["id"]),
-                    title=issue["title"],
-                    actor_name=current_user.name,
-                    new_status="closed",
-                    note_text="",          # no notes here
-                    issue_url=issue_url,
-                )
-                log_issue_event(issue_id, int(current_user.id), "status_email_sent", meta_json="closed")
-            except MailerError as e:
-                flash(f"Issue closed, email failed: {e}", "error")
+    # Helper to email one user about status change (no notes)
+    def _email_status(user_id: int):
+        u = get_user_by_id(user_id)
+        if not u or not mail_is_configured():
+            return
+        try:
+            send_issue_status_changed(
+                to=u["email"],
+                recipient_name=u["name"],
+                issue_id=int(issue["id"]),
+                title=issue["title"],
+                actor_name=current_user.name,
+                new_status="closed",
+                note_text="",  # NO notes here
+                issue_url=issue_url,
+            )
+            log_issue_event(issue_id, actor_id, "status_email_sent", meta_json=f"closed_to_{user_id}")
+        except MailerError as e:
+            flash(f"Issue closed, email failed: {e}", "error")
 
-    # 3) Notify single watcher (no notes)
+    # 2) Who to notify?
+    # - If assignee closes -> notify reporter (+ watcher)
+    # - If reporter closes -> notify assignee (+ watcher)
+    # - If admin/other allowed -> notify both reporter+assignee except actor
+    if mail_is_configured():
+        if actor_id == assignee_id:
+            # assignee closes
+            if reporter_id != actor_id:
+                _email_status(reporter_id)
+        elif actor_id == reporter_id:
+            # reporter closes
+            if assignee_id and assignee_id != actor_id:
+                _email_status(assignee_id)
+        else:
+            # admin closes (or other allowed)
+            if reporter_id != actor_id:
+                _email_status(reporter_id)
+            if assignee_id and assignee_id != actor_id:
+                _email_status(assignee_id)
+
+    # 3) Watcher always gets status email (no notes)
     _notify_single_watcher_status(issue_id, "closed")
 
     flash("Issue closed", "success")
     return redirect(url_for("issue_view", issue_id=issue_id))
+
 
 
 @app.post("/issues/<int:issue_id>/remind")
@@ -588,16 +612,23 @@ def issue_set_assignee(issue_id: int):
     if not issue:
         abort(404)
 
+    old_assignee_id = int(issue["assignee_id"]) if issue["assignee_id"] is not None else None
+
     assignee_raw = (request.form.get("assignee_id") or "").strip()
-    assignee_id = int(assignee_raw) if assignee_raw.isdigit() else None
+    new_assignee_id = int(assignee_raw) if assignee_raw.isdigit() else None
+
+    # If no change, do nothing
+    if old_assignee_id == new_assignee_id:
+        flash("Assignee unchanged", "info")
+        return redirect(url_for("issue_view", issue_id=issue_id))
 
     # DB update
-    set_issue_assignee(issue_id, assignee_id)
+    set_issue_assignee(issue_id, new_assignee_id)
     log_issue_event(issue_id, int(current_user.id), "assignee_changed")
 
-    # Notify new assignee (if exists and mail configured)
-    if assignee_id and mail_is_configured():
-        assignee = get_user_by_id(assignee_id)
+    # Notify new assignee
+    if new_assignee_id and mail_is_configured():
+        assignee = get_user_by_id(new_assignee_id)
         if assignee:
             try:
                 issue_url = f"{request.url_root.rstrip('/')}{url_for('issue_view', issue_id=issue_id)}"
@@ -610,11 +641,13 @@ def issue_set_assignee(issue_id: int):
                     assigner_name=current_user.name,
                     issue_url=issue_url,
                 )
+                log_issue_event(issue_id, int(current_user.id), "assigned_email_sent")
             except MailerError as e:
                 flash(f"Assignee updated, email failed: {e}", "error")
 
     flash("Assignee updated", "success")
     return redirect(url_for("issue_view", issue_id=issue_id))
+
 
 # -------------------------------------------------
 # Watcher
