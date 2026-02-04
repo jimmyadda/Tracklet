@@ -6,11 +6,12 @@ import shutil
 import sqlite3
 import uuid
 
-from flask import Flask, render_template, request, redirect, send_from_directory, url_for, flash, abort
+from flask import Flask, render_template, request, redirect, send_from_directory, url_for, flash, abort,send_file
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user, UserMixin
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask import send_from_directory
-from werkzeug.utils import secure_filename
+from werkzeug.utils import secure_filename,safe_join
+import mimetypes
 from config import settings
 from TrackletDB import (
     add_issue_file, add_role, deactivate_project, delete_project_hard, delete_role, delete_user_cascade, ensure_default_roles, get_issue_file, get_issue_notify_recipient, get_my_tasks_history, get_project_name, init_db, bootstrap_if_empty,
@@ -267,13 +268,31 @@ def file_download(file_id: int):
 
     issue_id = int(row["issue_id"])
     directory = _issue_dir(issue_id)
+    stored_name = row["stored_name"]
+    original_name = row["original_name"] or stored_name
 
-    return send_from_directory(
-        directory,
-        row["stored_name"],
+    # Build full path safely
+    full_path = directory / stored_name
+    if not full_path.exists():
+        abort(404)
+
+    # Pick best mimetype:
+    mime = (row.get("mime_type") or "").strip()
+    if not mime:
+        mime = mimetypes.guess_type(original_name)[0] or "application/octet-stream"
+
+    resp = send_file(
+        full_path,
+        mimetype=mime,
         as_attachment=True,
-        download_name=row["original_name"],
+        download_name=original_name,
+        conditional=True,
     )
+
+    # Extra hardening: some clients behave better with explicit disposition
+    resp.headers["Content-Disposition"] = f'attachment; filename="{original_name}"'
+
+    return resp
 
 # -------------------------------------------------
 # Projects
@@ -475,21 +494,50 @@ def issue_add_comment(issue_id: int):
 @app.post("/issues/<int:issue_id>/close")
 @login_required
 def issue_close(issue_id: int):
-    row = db_read_one("SELECT assignee_id, status FROM issues WHERE id=?", (issue_id,))
-    if not row:
+    issue = get_issue_view(issue_id)
+    if not issue:
         abort(404)
 
-    if row["status"] == "closed":
+    if issue["status"] == "closed":
         return redirect(url_for("issue_view", issue_id=issue_id))
 
-    if row["assignee_id"] != int(current_user.id) and not is_admin():
+    # Only assignee or admin can close
+    if issue["assignee_id"] != int(current_user.id) and not is_admin():
         abort(403)
 
-    close_issue(issue_id)
-    _notify_single_watcher_status(issue_id, "issue_closed")
+    # 1) DB close
+    set_issue_status(issue_id, "closed")
     log_issue_event(issue_id, int(current_user.id), "issue_closed")
+
+    issue_url = f"{request.url_root.rstrip('/')}{url_for('issue_view', issue_id=issue_id)}"
+
+    # 2) Notify assignee (if exists, and it's not the actor)
+    # If assignee closes it themselves -> no need to email them.
+    assignee_id = issue["assignee_id"]
+    if assignee_id and mail_is_configured() and int(assignee_id) != int(current_user.id):
+        assignee = get_user_by_id(int(assignee_id))
+        if assignee:
+            try:
+                send_issue_status_changed(
+                    to=assignee["email"],
+                    recipient_name=assignee["name"],
+                    issue_id=int(issue["id"]),
+                    title=issue["title"],
+                    actor_name=current_user.name,
+                    new_status="closed",
+                    note_text="",          # no notes here
+                    issue_url=issue_url,
+                )
+                log_issue_event(issue_id, int(current_user.id), "status_email_sent", meta_json="closed")
+            except MailerError as e:
+                flash(f"Issue closed, email failed: {e}", "error")
+
+    # 3) Notify single watcher (no notes)
+    _notify_single_watcher_status(issue_id, "closed")
+
     flash("Issue closed", "success")
     return redirect(url_for("issue_view", issue_id=issue_id))
+
 
 @app.post("/issues/<int:issue_id>/remind")
 @login_required

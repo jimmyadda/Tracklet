@@ -39,11 +39,15 @@
  <!-- Topbar -->
 <div class="topbar">
   <div class="topbar-left">
-    <div class="app-title">Tracklet</div>
-
-    <form class="topbar-search" method="get" action="{{ url_for('search') }}">
-      <input name="q" placeholder="Search issues or projects…" value="{{ request.args.get('q','') }}">
-    </form>
+    <div class="app-title">Search <br> Tracklet</div>
+        <form class="topbar-search with-icon" method="get" action="{{ url_for('search') }}">
+          <input
+            class="search-input"
+            name="q"
+            placeholder="Search issues or projects…"
+            value="{{ request.args.get('q','') }}"
+          >
+        </form>
   </div>
 
   {% if current_user.is_authenticated %}

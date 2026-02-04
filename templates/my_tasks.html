@@ -26,6 +26,7 @@
             <th>Title</th>
             <th style="width:180px;">Project</th>
             <th style="width:140px;">Status</th>
+            <th style="width:140px;">Opened at</th>
             <th style="width:140px;">Priority</th>
             <th style="width:120px;"></th>
           </tr>
@@ -36,6 +37,7 @@
             <td class="mono">#{{ i.id }}</td>
             <td class="cell-strong">{{ i.title }}</td>
             <td class="muted">{{ i.project_name }}</td>
+            <td class="muted">{{ (i.updated_at or "")[:19] }}</td>
             <td><span class="pill">{{ i.status }}</span></td>
             <td><span class="pill pri-{{ i.priority }}">{{ i.priority }}</span></td>
             <td style="text-align:right;">
