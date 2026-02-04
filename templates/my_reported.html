@@ -1,12 +1,12 @@
 {% extends "layout.html" %}
-{% set title = "My Tasks History" %}
+{% set title = "My Reported Issues" %}
 {% block content %}
 
 <div class="card">
   <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
     <div>
-      <div class="card-title">Closed Tasks</div>
-      <div class="muted">Closed issues assigned to you</div>
+      <div class="card-title">My Reported Issues</div>
+      <div class="muted">My Reported Issues</div>
     </div>
     <a class="btn btn-ghost btn-topbar" style="margin-bottom:0;" href="{{ url_for('my_tasks') }}">
       Back to My Tasks

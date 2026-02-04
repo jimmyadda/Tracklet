@@ -33,7 +33,7 @@
         </thead>
         <tbody>
           {% for i in issues %}
-          <tr class="rowlink" data-href="{{ url_for('issue_view', issue_id=i.id) }}">
+          <tr class="rowlink {{ due_class(i.due_date, i.status) }} " data-href="{{ url_for('issue_view', issue_id=i.id) }}">
             <td class="mono">#{{ i.id }}</td>
             <td class="cell-strong">{{ i.title }}</td>
             <td class="muted">{{ i.project_name }}</td>

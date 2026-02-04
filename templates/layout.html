@@ -23,6 +23,7 @@
       <a class="navlink" href="{{ url_for('projects_list') }}">Projects</a>
       <a class="navlink" href="{{ url_for('my_tasks') }}">My Tasks</a>
       <a class="navlink" href="{{ url_for('issue_new') }}">Create Issue</a>
+      <a class="navlink" href="{{ url_for('my_reported') }}">My Reported</a>
       <a class="navlink" href="{{ url_for('my_settings') }}">My Settings</a>
 
       {% if current_user.is_authenticated and current_user.role == 'admin' %}
@@ -52,6 +53,10 @@
 
   {% if current_user.is_authenticated %}
   <div class="topbar-right">
+<button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle theme">
+  <span class="icon-sun">☀️</span>
+  <span class="icon-moon">🌙</span>
+</button>
     <div class="user-chip">
       <div class="user-avatar">{{ (current_user.name or "U")[:1] | upper }}</div>
       <div class="user-meta">
@@ -67,7 +72,39 @@
   {% endif %}
 </div>
 
+<style>
+/* Theme toggle button */
+.theme-toggle{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  transition: background .2s ease, border-color .2s ease;
+  margin-bottom: 0;
+}
 
+.theme-toggle:hover{
+  background: rgba(255,255,255,.06);
+}
+
+.theme-toggle span{
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* Default: dark mode → show sun */
+.theme-toggle .icon-moon{ display: none; }
+
+/* Light mode → show moon */
+body.theme-light .theme-toggle .icon-sun{ display: none; }
+body.theme-light .theme-toggle .icon-moon{ display: inline; }
+
+</style>
 <!--End Top nav-->
 
 
@@ -85,6 +122,31 @@
     </main>
 
   </div>
+
+
+  <script>
+(function(){
+  const key = "tracklet_theme";
+  const body = document.body;
+  const btn = document.getElementById("themeToggle");
+
+  // Load saved theme
+  const saved = localStorage.getItem(key);
+  if (saved === "light") body.classList.add("theme-light");
+
+  if (btn){
+    btn.addEventListener("click", () => {
+      body.classList.toggle("theme-light");
+      localStorage.setItem(
+        key,
+        body.classList.contains("theme-light") ? "light" : "dark"
+      );
+    });
+  }
+})();
+</script>
+
+
 </body>
 
 <script>

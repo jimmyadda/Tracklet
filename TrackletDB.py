@@ -529,7 +529,24 @@ def set_issue_assignee(issue_id: int, assignee_id: Optional[int]) -> None:
 def get_project_name(project_id: int) -> str:
     row = db_read_one("SELECT name FROM projects WHERE id=?", (project_id,))
     return row["name"] if row else "Project"
-    
+
+def get_my_reported_issues(user_id: int, *, include_closed: bool = True) -> list[sqlite3.Row]:
+    where_extra = "" if include_closed else " AND i.status <> 'closed'"
+    return db_read_all(
+        f"""
+        SELECT i.*, p.name AS project_name,
+               au.name AS assignee_name
+        FROM issues i
+        JOIN projects p ON p.id=i.project_id
+        LEFT JOIN users au ON au.id=i.assignee_id
+        WHERE i.reporter_id=? {where_extra}
+        ORDER BY
+          CASE i.status WHEN 'open' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'blocked' THEN 3 ELSE 4 END,
+          CASE i.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
+          i.updated_at DESC
+        """,
+        (user_id,),
+    )    
 # -------------------------------------------------------
 # Comments
 # -------------------------------------------------------

@@ -20,6 +20,174 @@
 }
 
 /* =========================================================
+   Light Theme (better bright mode)
+========================================================= */
+body.theme-light{
+  /* base surfaces */
+  --bg: #f5f7fb;
+  --panel: #ffffff;
+  --panel-soft: rgba(17,24,39,.03);
+  --border: rgba(17,24,39,.12);
+
+  /* text */
+  --text: #111827;
+  --muted: #6b7280;
+
+  /* keep brand */
+  /* --purple-1,2,3 stay the same */
+
+  /* status colors slightly darker for light bg */
+  --green: #16a34a;
+  --yellow: #ca8a04;
+  --red: #dc2626;
+}
+
+/* Body background + default text */
+body.theme-light{
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Cards/panels */
+body.theme-light .card,
+body.theme-light .panel,
+body.theme-light .table-wrap{
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 30px rgba(17,24,39,.06);
+}
+
+/* Sidebar: remove dark gradient */
+body.theme-light .sidebar{
+  background: linear-gradient(180deg, #eef2ff 0%, #f5f7fb 55%, #f5f7fb 100%);
+  border-right: 1px solid var(--border);
+}
+
+/* Sidebar links */
+body.theme-light .navlink{
+  color: rgba(17,24,39,.72);
+}
+body.theme-light .navlink:hover{
+  background: rgba(99,102,241,.10);
+  color: rgba(17,24,39,.92);
+}
+
+/* Brand block (Tracklet logo area) */
+body.theme-light .brand{
+  background: rgba(99,102,241,.08);
+  border: 1px solid rgba(99,102,241,.18);
+}
+
+/* Topbar: make it clean (your screenshot has a dark capsule) */
+body.theme-light .topbar{
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 30px rgba(17,24,39,.07);
+}
+body.theme-light .topbar *{
+  color: var(--text);
+}
+
+/* Inputs: search bar + forms */
+body.theme-light input,
+body.theme-light select,
+body.theme-light textarea{
+  background: #ffffff;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+body.theme-light input::placeholder{
+  color: rgba(107,114,128,.9);
+}
+body.theme-light input:focus,
+body.theme-light select:focus,
+body.theme-light textarea:focus{
+  border-color: rgba(106,92,255,.55);
+  box-shadow: 0 0 0 4px rgba(106,92,255,.15);
+  outline: none;
+}
+
+/* Table: your header is still dark in light mode — fix */
+body.theme-light table thead th,
+body.theme-light .table .row.head > div{
+  background: #f3f4f6;
+  color: rgba(17,24,39,.72);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Table rows */
+body.theme-light table tbody td,
+body.theme-light .table .row > div{
+  border-bottom: 1px solid rgba(17,24,39,.08);
+}
+
+/* Row hover */
+body.theme-light tr.rowlink:hover td,
+body.theme-light .rowlink:hover > div{
+  background: rgba(99,102,241,.06);
+}
+
+/* Buttons */
+body.theme-light .btn{
+  border: 1px solid var(--border);
+  color: var(--text);
+  background: #ffffff;
+}
+body.theme-light .btn:hover{
+  background: rgba(17,24,39,.04);
+}
+
+body.theme-light .btn-primary{
+  background: linear-gradient(135deg, var(--purple-1), var(--purple-2));
+  border: none;
+  color: #fff;
+}
+body.theme-light .btn-primary:hover{
+  filter: brightness(1.02);
+}
+
+/* Pills */
+body.theme-light .pill{
+  border: 1px solid rgba(17,24,39,.12);
+  background: rgba(17,24,39,.04);
+  color: rgba(17,24,39,.80);
+}
+
+/* Due-date highlight rows keep working */
+body.theme-light tr.row-overdue td{
+  background: rgba(220, 38, 38, .10);
+}
+body.theme-light tr.row-due-today td{
+  background: rgba(202, 138, 4, .10);
+}
+
+/* Search input – always visible border in light mode */
+body.theme-light .topbar input[type="search"],
+body.theme-light .topbar input[type="text"]{
+  background: #ffffff;
+  border: 1.5px solid rgba(17,24,39,.25); /* ← visible even when not focused */
+  color: #111827;
+  box-shadow: none;
+}
+
+/* Placeholder */
+body.theme-light .topbar input::placeholder{
+  color: rgba(107,114,128,.85);
+}
+
+/* Focus state (stronger but same border logic) */
+body.theme-light .topbar input:focus{
+  border-color: rgba(106,92,255,.65);
+  box-shadow: 0 0 0 3px rgba(106,92,255,.18);
+  outline: none;
+}
+.topbar input{
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 999px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+/* =========================================================
    Base
 ========================================================= */
 
@@ -177,6 +345,17 @@ img{ max-width:100%; display:block; }
   text-align:left;
   font-size:12px;
   color:var(--muted);
+}
+
+tr.row-overdue td{
+  background: rgba(239, 68, 68, .14);
+}
+tr.row-due-today td{
+  background: rgba(245, 158, 11, .14);
+}
+tr.row-overdue:hover td,
+tr.row-due-today:hover td{
+  background: rgba(255,255,255,.06);
 }
 
 /* =========================================================
@@ -1012,7 +1191,7 @@ input, textarea, select{
   color: #eaeaf0;
   background: rgba(255, 255, 255, 0.08);
 
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid  #dadada;
   border-radius: 10px;
 
   outline: none;

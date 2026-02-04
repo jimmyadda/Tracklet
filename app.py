@@ -14,7 +14,7 @@ from werkzeug.utils import secure_filename,safe_join
 import mimetypes
 from config import settings
 from TrackletDB import (
-    add_issue_file, add_role, deactivate_project, delete_project_hard, delete_role, delete_user_cascade, ensure_default_roles, get_issue_file, get_issue_notify_recipient, get_my_tasks_history, get_project_name, init_db, bootstrap_if_empty,
+    add_issue_file, add_role, deactivate_project, delete_project_hard, delete_role, delete_user_cascade, ensure_default_roles, get_issue_file, get_issue_notify_recipient, get_my_reported_issues, get_my_tasks_history, get_project_name, init_db, bootstrap_if_empty,
 
     # users
     get_user_by_id, get_user_by_email, list_issue_files,  list_roles_active, list_roles_admin,
@@ -123,6 +123,24 @@ def load_user(user_id: str):
 def is_admin() -> bool:
     return current_user.is_authenticated and current_user.role == "admin"
 
+
+@app.context_processor
+def inject_helpers():
+    def due_class(due_date_str, status):
+        if not due_date_str or status == "closed":
+            return ""
+        try:
+            y, m, d = map(int, str(due_date_str)[:10].split("-"))
+            due = date(y, m, d)
+        except Exception:
+            return ""
+        today = date.today()
+        if due < today:
+            return "row-overdue"       # red
+        if due == today:
+            return "row-due-today"     # yellow
+        return ""
+    return {"due_class": due_class}
 
 # -------------------------------------------------
 # Startup
@@ -648,7 +666,11 @@ def issue_set_assignee(issue_id: int):
     flash("Assignee updated", "success")
     return redirect(url_for("issue_view", issue_id=issue_id))
 
-
+@app.get("/my-reported")
+@login_required
+def my_reported():
+    issues = get_my_reported_issues(int(current_user.id), include_closed=True)
+    return render_template("my_reported.html", issues=issues)
 # -------------------------------------------------
 # Watcher
 # -------------------------------------------------
