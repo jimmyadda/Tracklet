@@ -1,6 +1,75 @@
 {% extends "layout.html" %}
 {% block content %}
-  <div class="header">
+<style>
+  /* === Issue form uploader (click + paste) === */
+
+.uploader-zone{
+  margin: 12px 0 18px;
+  padding: 16px 18px;
+
+  border-radius: 14px;
+  border: 1.5px dashed rgba(255,255,255,.22);
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,.04),
+    rgba(255,255,255,.02)
+  );
+
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  cursor: pointer;
+  transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
+
+/* hover = ready */
+.uploader-zone:hover{
+  border-color: var(--purple-1);
+  background: rgba(255,255,255,.06);
+}
+
+/* focus = paste ready */
+.uploader-zone:focus{
+  outline: none;
+  border-color: var(--purple-1);
+  box-shadow: 0 0 0 3px rgba(155,140,255,.22);
+}
+
+/* arrow icon */
+.uploader-icon{
+  font-size: 22px;
+  opacity: .85;
+  line-height: 1;
+}
+
+/* text block */
+.uploader-text{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.uploader-text strong{
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.uploader-text span{
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* subtle hint animation */
+.uploader-zone:hover .uploader-icon{
+  transform: translateY(-1px);
+  transition: transform .15s ease;
+}
+
+</style>  
+
+<div class="header">
     <h1>Create Issue</h1>
   </div>
 
@@ -22,9 +91,28 @@
       <label class="label">Deadline</label>
       <input type="date" name="due_date" value="{{ default_due }}" required>
 
-        <label class="label">Attachment (optional)</label>
-        <input type="file" name="file">
-      <div class="grid2">
+        <div class="uploader-zone"
+            tabindex="0"
+            data-upload-url="{{ url_for('issue_upload_temp') }}">
+
+          <input type="file"
+                class="uploader-input"
+                name="file"
+                accept="image/*"
+                hidden>
+
+          <div class="uploader-content">
+            <div class="uploader-icon">⬆</div>
+            <div class="uploader-text">
+              <strong>Click to upload</strong>
+              <span>Hover here, then paste image (Ctrl+V)</span>
+            </div>
+          </div>
+        </div>
+      
+        <div id="temp-uploads"></div>
+
+        <div class="grid2">
         <div>
           <label>Priority</label>
           <select name="priority">
@@ -56,4 +144,79 @@
       <button class="btn btn-primary" type="submit">Create</button>
     </form>
   </div>
+
+
+<script>
+(function(){
+  const zone = document.querySelector('.uploader-zone');
+  if (!zone) return;
+
+  const input = zone.querySelector('.uploader-input');
+  const uploadUrl = zone.dataset.uploadUrl;
+  const tempUploads = document.getElementById('temp-uploads');
+
+  // focus on hover so Ctrl+V works
+  zone.addEventListener('mouseenter', () => zone.focus());
+
+  // click opens file picker
+  zone.addEventListener('click', () => input.click());
+
+  input.addEventListener('change', () => {
+    if (input.files.length) uploadFile(input.files[0]);
+    input.value = ""; // allow re-select same file
+  });
+
+  zone.addEventListener('paste', (e) => {
+    const items = e.clipboardData?.items || [];
+    const imgItem = Array.from(items).find(i => i.type?.startsWith('image/'));
+    if (!imgItem) return;
+    e.preventDefault();
+    uploadFile(imgItem.getAsFile());
+  });
+
+  async function uploadFile(file){
+    const fd = new FormData();
+    const name = file.name || `pasted_${Date.now()}.png`;
+    fd.append('file', file, name);
+
+    const hint = zone.querySelector('.uploader-text span');
+    if (hint) hint.textContent = 'Uploading…';
+
+    const res = await fetch(uploadUrl, {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: { 'X-Requested-With': 'fetch' }
+    });
+
+    if (!res.ok) {
+      if (hint) hint.textContent = 'Upload failed';
+      return;
+    }
+
+    const data = await res.json();
+    // expected: {stored_name, original_name, mime_type, size_bytes}
+    addHidden("temp_stored[]", data.stored_name);
+    addHidden("temp_original[]", data.original_name || name);
+    addHidden("temp_mime[]", data.mime_type || file.type || "");
+    addHidden("temp_size[]", String(data.size_bytes || file.size || 0));
+
+    if (hint) hint.textContent = `Added (${countTemp()} file${countTemp() === 1 ? '' : 's'})`;
+  }
+
+  function addHidden(name, value){
+    const i = document.createElement('input');
+    i.type = 'hidden';
+    i.name = name;
+    i.value = value ?? '';
+    tempUploads.appendChild(i);
+  }
+
+  function countTemp(){
+    return tempUploads.querySelectorAll('input[name="temp_stored[]"]').length;
+  }
+})();
+</script>
+
+
 {% endblock %}

@@ -6,7 +6,7 @@ import shutil
 import sqlite3
 import uuid
 
-from flask import Flask, render_template, request, redirect, send_from_directory, url_for, flash, abort,send_file
+from flask import Flask, jsonify, render_template, request, redirect, send_from_directory, url_for, flash, abort,send_file
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user, UserMixin
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask import send_from_directory
@@ -141,6 +141,56 @@ def inject_helpers():
             return "row-due-today"     # yellow
         return ""
     return {"due_class": due_class}
+
+
+
+def _move_temp_attachments_to_issue(issue_id: int, uploader_id: int):
+    temp_stored = request.form.getlist("temp_stored[]")
+    temp_original = request.form.getlist("temp_original[]")
+    temp_mime = request.form.getlist("temp_mime[]")
+    temp_size = request.form.getlist("temp_size[]")
+
+    if not temp_stored:
+        return
+
+    tdir = _temp_dir()
+    idir = _issue_dir(issue_id)
+
+    # safety: ensure parallel arrays
+    n = min(len(temp_stored), len(temp_original), len(temp_mime), len(temp_size))
+
+    for i in range(n):
+        stored = temp_stored[i]
+        original = temp_original[i] or stored
+        mime = (temp_mime[i] or "").strip()
+        try:
+            size_bytes = int(temp_size[i] or 0)
+        except ValueError:
+            size_bytes = 0
+
+        src = tdir / stored
+        if not src.exists():
+            continue
+
+        # move temp -> issue folder
+        dst = idir / stored
+        shutil.move(str(src), str(dst))
+
+        # if size missing, compute now
+        if size_bytes <= 0 and dst.exists():
+            size_bytes = dst.stat().st_size
+
+        # insert DB record (uses your existing function)
+        add_issue_file(
+            issue_id=issue_id,
+            uploader_id=int(uploader_id),
+            stored_name=stored,
+            original_name=original,
+            mime_type=mime,
+            size_bytes=size_bytes,
+        )
+
+
 
 # -------------------------------------------------
 # Startup
@@ -277,6 +327,41 @@ def issue_upload(issue_id: int):
     flash("File uploaded", "success")
     return redirect(url_for("issue_view", issue_id=issue_id))
 
+def _temp_dir() -> Path:
+    base = _ensure_upload_dir()
+    d = base / "temp"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+@app.post("/issues/upload-temp")
+@login_required
+def issue_upload_temp():
+    f = request.files.get("file")
+    if not f:
+        abort(400)
+
+    original = secure_filename(f.filename or "")
+    # if paste comes without name, make one:
+    if not original:
+        original = f"pasted_{uuid.uuid4().hex}.png"
+
+    ext = Path(original).suffix.lower()
+    stored = f"{uuid.uuid4().hex}{ext}"
+
+    target = _temp_dir() / stored
+    f.save(target)
+
+    size_bytes = target.stat().st_size
+    mime_type = (f.mimetype or "").strip()
+    if not mime_type:
+        mime_type = mimetypes.guess_type(original)[0] or "application/octet-stream"
+
+    return jsonify({
+        "stored_name": stored,
+        "original_name": original,
+        "mime_type": mime_type,
+        "size_bytes": size_bytes,
+    })
 
 
 @app.get("/files/<int:file_id>/download")
@@ -436,6 +521,12 @@ def issue_new_post():
         set_issue_watcher(issue_id, watcher_id)
         log_issue_event(issue_id, int(current_user.id), "watcher_set_on_create")
     
+    # ✅ NEW: move any temp/pasted attachments into this new issue
+    _move_temp_attachments_to_issue(issue_id, int(current_user.id))
+    # optional: log if any were moved (only if you want)
+    if request.form.getlist("temp_stored[]"):
+        log_issue_event(issue_id, int(current_user.id), "file_uploaded_on_create")    
+    
     # 2) optional attachment on create
     f = request.files.get("file")
     if f and f.filename:
@@ -460,6 +551,8 @@ def issue_new_post():
             size_bytes=target_path.stat().st_size,
         )
         log_issue_event(issue_id, int(current_user.id), "file_uploaded_on_create")
+
+
 
     # 3) email assignee
     if assignee_id:
