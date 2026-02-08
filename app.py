@@ -14,7 +14,7 @@ from werkzeug.utils import secure_filename,safe_join
 import mimetypes
 from config import settings
 from TrackletDB import (
-    add_issue_file, add_role, deactivate_project, delete_project_hard, delete_role, delete_user_cascade, ensure_default_roles, get_issue_file, get_issue_notify_recipient, get_my_reported_issues, get_my_tasks_history, get_project_name, init_db, bootstrap_if_empty,
+    add_issue_file, add_role, deactivate_project, delete_issue_file, delete_project_hard, delete_role, delete_user_cascade, ensure_default_roles, get_issue_file, get_issue_notify_recipient, get_my_reported_issues, get_my_tasks_history, get_project_name, init_db, bootstrap_if_empty,
 
     # users
     get_user_by_id, get_user_by_email, list_issue_files,  list_roles_active, list_roles_admin,
@@ -277,6 +277,8 @@ def issue_upload(issue_id: int):
     flash("File uploaded", "success")
     return redirect(url_for("issue_view", issue_id=issue_id))
 
+
+
 @app.get("/files/<int:file_id>/download")
 @login_required
 def file_download(file_id: int):
@@ -286,20 +288,19 @@ def file_download(file_id: int):
 
     issue_id = int(row["issue_id"])
     directory = _issue_dir(issue_id)
+
     stored_name = row["stored_name"]
     original_name = row["original_name"] or stored_name
 
-    # Build full path safely
-    full_path = directory / stored_name
+    full_path = Path(directory) / stored_name
     if not full_path.exists():
         abort(404)
 
-    # Pick best mimetype:
-    mime = (row.get("mime_type") or "").strip()
+    mime = (row["mime_type"] or "").strip()
     if not mime:
         mime = mimetypes.guess_type(original_name)[0] or "application/octet-stream"
 
-    resp = send_file(
+    return send_file(
         full_path,
         mimetype=mime,
         as_attachment=True,
@@ -307,10 +308,52 @@ def file_download(file_id: int):
         conditional=True,
     )
 
-    # Extra hardening: some clients behave better with explicit disposition
-    resp.headers["Content-Disposition"] = f'attachment; filename="{original_name}"'
 
-    return resp
+@app.get("/files/<int:file_id>/view")
+@login_required
+def file_view(file_id: int):
+    row = get_issue_file(file_id)
+    if not row:
+        abort(404)
+
+    issue_id = int(row["issue_id"])
+    full_path = _issue_dir(issue_id) / row["stored_name"]
+    if not full_path.exists():
+        abort(404)
+
+    mime = (row["mime_type"] or "").strip() or mimetypes.guess_type(row["original_name"])[0] or "application/octet-stream"
+    return send_file(full_path, mimetype=mime, as_attachment=False, conditional=True)
+
+
+@app.post("/files/<int:file_id>/delete")
+@login_required
+def file_delete(file_id: int):
+    row = get_issue_file(file_id)
+    if not row:
+        abort(404)
+
+    issue_id = int(row["issue_id"])
+    stored_name = row["stored_name"]
+
+    # (Optional but recommended) authorize: only uploader or issue owner/admin can delete
+    # if int(row["uploader_id"]) != int(current_user.id) and not current_user.is_admin:
+    #     abort(403)
+
+    # Delete file from disk
+    full_path = _issue_dir(issue_id) / stored_name
+    try:
+        if full_path.exists():
+            full_path.unlink()
+    except Exception as e:
+        # don't fail hard; still remove DB record if you want
+        flash(f"Could not delete file from disk: {e}", "error")
+
+    # Delete record from DB
+    delete_issue_file(file_id)  # <-- you implement this
+    log_issue_event(issue_id, int(current_user.id), "file_deleted")
+
+    flash("File deleted", "success")
+    return redirect(url_for("issue_view", issue_id=issue_id))
 
 # -------------------------------------------------
 # Projects

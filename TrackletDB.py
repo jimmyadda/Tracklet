@@ -472,6 +472,9 @@ def list_issue_files(issue_id: int) -> list[sqlite3.Row]:
 def get_issue_file(file_id: int) -> Optional[sqlite3.Row]:
     return db_read_one("SELECT * FROM issue_files WHERE id=?", (file_id,))
 
+def delete_issue_file(file_id: int):
+    db_write("DELETE FROM issue_files WHERE id = ?", (file_id,))
+
 def set_issue_status(issue_id: int, new_status: str) -> None:
     if new_status == "closed":
         db_write(
