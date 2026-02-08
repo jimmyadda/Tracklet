@@ -48,7 +48,8 @@
   background: rgba(255,255,255,.10);
   border-color: rgba(255,255,255,.22);
 }
-
+.preview-link{ display:block; }
+.preview-link:hover .preview-blur{ filter: blur(0px); }
 /* Delete: blur/glass */
 .btn.btn-blur-danger{
   display:inline-flex;
@@ -186,6 +187,47 @@
   font-weight:800;
   letter-spacing:1px;
 }
+/*copy paste*/
+/* unified uploader: click + paste */
+.uploader-zone{
+  cursor:pointer;
+  margin-bottom: 20px;
+}
+
+
+.uploader-zone:hover{
+  border-color: var(--purple-1);
+  background: rgba(255,255,255,.06);
+}
+
+.uploader-zone:focus{
+  outline:none;
+  border-color: rgba(155,140,255,.55);
+  box-shadow: 0 0 0 3px rgba(155,140,255,.18);
+}
+
+.uploader-content{
+  text-align:center;
+  pointer-events:none;
+}
+
+.uploader-icon{
+  font-size:28px;
+  margin-bottom:8px;
+  opacity:.9;
+}
+
+.uploader-text strong{
+  display:block;
+  font-size:14px;
+  color: var(--text);
+}
+
+.uploader-text span{
+  font-size:12px;
+  color: var(--muted);
+}
+
 </style>
   <div class="header">
     <div>
@@ -239,18 +281,37 @@
 
       <div class="card">
   <div class="card-title">Attachments</div>
+    <!--Upload-->
+      <div class="uploader-zone"
+          tabindex="0"
+          data-upload-url="{{ url_for('issue_upload', issue_id=issue.id) }}">
 
-  <form method="post" action="{{ url_for('issue_upload', issue_id=issue.id) }}" enctype="multipart/form-data">
-    <input type="file" name="file" required>
-    <button class="btn btn-primary" type="submit">Upload</button>
-  </form>
+        <input type="file"
+              class="uploader-input"
+              name="file"
+              accept="image/*"
+              hidden>
+
+        <div class="uploader-content">
+          <div class="uploader-icon">⬆</div>
+          <div class="uploader-text">
+            <strong>Click to upload</strong>
+            <span>Move mouse here to paste image (Ctrl+V)</span>
+          </div>
+        </div>
+      </div>
+
 
   <div class="attach-grid">
     {% for f in files %}
 
     <div class="attach-card">
   {% if f.mime_type and f.mime_type.startswith('image/') %}
-    <img class="preview-blur" src="{{ url_for('file_view', file_id=f.id) }}" alt="{{ f.original_name }}">
+    <a class="preview-link" target="_blank"
+   href="{{ url_for('file_view', file_id=f.id) }}"
+   title="Open">
+  <img class="preview-blur" src="{{ url_for('file_view', file_id=f.id) }}" alt="{{ f.original_name }}">
+</a>
   {% else %}
     <div class="preview-blur file-fallback">
       <div class="file-label">FILE</div>
@@ -334,4 +395,57 @@
 </div>
 
   </div>
+
+
+<script>
+(function(){
+  const zone = document.querySelector('.uploader-zone');
+  
+    if (zone) {
+      zone.addEventListener('mouseenter', () => {
+        zone.focus();
+      });
+    }
+
+  const input = zone.querySelector('.uploader-input');
+  const uploadUrl = zone.dataset.uploadUrl;
+
+  zone.addEventListener('click', () => input.click());
+
+  input.addEventListener('change', () => {
+    if (input.files.length) uploadFile(input.files[0]);
+  });
+
+  zone.addEventListener('paste', (e) => {
+    const items = e.clipboardData?.items || [];
+    const imgItem = Array.from(items).find(i => i.type?.startsWith('image/'));
+    if (!imgItem) return;
+
+    e.preventDefault();
+    uploadFile(imgItem.getAsFile());
+  });
+
+  async function uploadFile(file){
+    const fd = new FormData();
+    fd.append('file', file, file.name || `pasted_${Date.now()}.png`);
+
+    zone.querySelector('.uploader-text span').textContent = 'Uploading…';
+
+    const res = await fetch(uploadUrl, {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: { 'X-Requested-With': 'fetch' }
+    });
+
+    if (res.ok) {
+      location.reload();
+    } else {
+      zone.querySelector('.uploader-text span').textContent = 'Upload failed';
+    }
+  }
+})();
+</script>
+
+
 {% endblock %}
