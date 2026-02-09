@@ -14,10 +14,10 @@ from werkzeug.utils import secure_filename,safe_join
 import mimetypes
 from config import settings
 from TrackletDB import (
-    add_issue_file, add_role, deactivate_project, delete_issue_file, delete_project_hard, delete_role, delete_user_cascade, ensure_default_roles, get_issue_file, get_issue_notify_recipient, get_my_reported_issues, get_my_tasks_history, get_project_name, init_db, bootstrap_if_empty,
+    add_comment_file, add_issue_file, add_role, deactivate_project, delete_issue_file, delete_project_hard, delete_role, delete_user_cascade, ensure_default_roles, get_comment_file, get_issue_file, get_issue_notify_recipient, get_my_reported_issues, get_my_tasks_history, get_project_name, init_db, bootstrap_if_empty,
 
     # users
-    get_user_by_id, get_user_by_email, list_issue_files,  list_roles_active, list_roles_admin,
+    get_user_by_id, get_user_by_email, list_comment_files_for_issue, list_issue_files,  list_roles_active, list_roles_admin,
     list_users_active, list_users_admin, create_user,
 
     # projects
@@ -142,7 +142,20 @@ def inject_helpers():
         return ""
     return {"due_class": due_class}
 
+# -------------------------------------------------
+# Helpers
+# -------------------------------------------------
 
+def _ensure_upload_dir() -> Path:
+    p = Path(settings.UPLOAD_DIR)
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+def _issue_dir(issue_id: int) -> Path:
+    base = _ensure_upload_dir()
+    d = base / f"issue_{issue_id}"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 def _move_temp_attachments_to_issue(issue_id: int, uploader_id: int):
     temp_stored = request.form.getlist("temp_stored[]")
@@ -190,7 +203,65 @@ def _move_temp_attachments_to_issue(issue_id: int, uploader_id: int):
             size_bytes=size_bytes,
         )
 
+def _temp_dir() -> Path:
+    base = _ensure_upload_dir()
+    d = base / "temp"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
+def _comment_dir(issue_id: int, comment_id: int) -> Path:
+    d = _issue_dir(issue_id) / "comments" / f"comment_{comment_id}"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+def _temp_comment_dir(issue_id: int) -> Path:
+    d = _issue_dir(issue_id) / "temp_comments"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+def _finalize_comment_temp_files(issue_id: int, comment_id: int, uploader_id: int):
+    temp_stored = request.form.getlist("temp_stored[]")
+    temp_original = request.form.getlist("temp_original[]")
+    temp_mime = request.form.getlist("temp_mime[]")
+    temp_size = request.form.getlist("temp_size[]")
+
+    if not temp_stored:
+        return
+
+    tdir = _temp_comment_dir(issue_id)
+    dest = _comment_dir(issue_id, comment_id)
+
+    n = min(len(temp_stored), len(temp_original), len(temp_mime), len(temp_size))
+    for i in range(n):
+        stored = (temp_stored[i] or "").strip()
+        if not stored:
+            continue
+
+        src = tdir / stored
+        if not src.exists():
+            continue
+
+        original = (temp_original[i] or stored).strip()
+        mime = (temp_mime[i] or "").strip()
+        try:
+            size_bytes = int(temp_size[i] or 0)
+        except ValueError:
+            size_bytes = 0
+
+        dst = dest / stored
+        shutil.move(str(src), str(dst))
+
+        if size_bytes <= 0 and dst.exists():
+            size_bytes = dst.stat().st_size
+
+        add_comment_file(
+            comment_id=comment_id,
+            uploader_id=uploader_id,
+            stored_name=stored,
+            original_name=original,
+            mime_type=mime,
+            size_bytes=size_bytes,
+        )
 
 # -------------------------------------------------
 # Startup
@@ -277,18 +348,6 @@ def search():
 # Files
 # -------------------------------------------------
 
-def _ensure_upload_dir() -> Path:
-    p = Path(settings.UPLOAD_DIR)
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-def _issue_dir(issue_id: int) -> Path:
-    base = _ensure_upload_dir()
-    d = base / f"issue_{issue_id}"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
 @app.post("/issues/<int:issue_id>/upload")
 @login_required
 def issue_upload(issue_id: int):
@@ -327,11 +386,6 @@ def issue_upload(issue_id: int):
     flash("File uploaded", "success")
     return redirect(url_for("issue_view", issue_id=issue_id))
 
-def _temp_dir() -> Path:
-    base = _ensure_upload_dir()
-    d = base / "temp"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
 
 @app.post("/issues/upload-temp")
 @login_required
@@ -583,6 +637,19 @@ def issue_new_post():
 def issue_view(issue_id: int):
     issue = get_issue_view(issue_id)
     users = list_users_active()
+    comments = list_comments(issue_id)
+    files = list_comment_files_for_issue(issue_id)
+
+    by_comment = {}
+    for f in files:
+        by_comment.setdefault(int(f["comment_id"]), []).append(f)
+
+    # attach list to each comment
+    comments_out = []
+    for c in comments:
+        d = dict(c)
+        d["files"] = by_comment.get(int(c["id"]), [])
+        comments_out.append(d)    
 
     if not issue:
         abort(404)
@@ -591,59 +658,15 @@ def issue_view(issue_id: int):
     return render_template(
         "issue_view.html",
         issue=issue,
-        comments=list_comments(issue_id),
+        comments=comments_out,
         users=users,
         files=files,
         mail_enabled=mail_is_configured(),
     )
 
 
-@app.post("/issues/<int:issue_id>/comment")
-@login_required
-def issue_add_comment(issue_id: int):
-    """
-    Add a comment to an issue.
-    If the actor is the reporter -> notify assignee (if exists).
-    If the actor is the assignee -> notify reporter.
-    (All DB interaction is in TrackletDB.)
-    """
-    body = (request.form.get("body") or "").strip()
-    if not body:
-        flash("Comment cannot be empty", "error")
-        return redirect(url_for("issue_view", issue_id=issue_id))
 
-    # Ensure issue exists + get details for email subject/body
-    issue = get_issue_view(issue_id)
-    if not issue:
-        abort(404)
 
-    # DB: insert comment + audit event
-    add_comment(issue_id, int(current_user.id), body)
-    log_issue_event(issue_id, int(current_user.id), "comment_added")
-
-    # DB: determine who should be notified (reporter<->assignee)
-    recipient = get_issue_notify_recipient(issue_id, int(current_user.id))
-
-    # Mail: notify the other party (if configured)
-    if recipient and mail_is_configured():
-        try:
-            issue_url = f"{request.url_root.rstrip('/')}{url_for('issue_view', issue_id=issue_id)}"
-            send_issue_comment(
-                to=recipient["email"],
-                recipient_name=recipient["name"],
-                issue_id=int(issue["id"]),
-                title=issue["title"],
-                actor_name=current_user.name,
-                comment_text=body,
-                issue_url=issue_url,
-            )
-            log_issue_event(issue_id, int(current_user.id), "comment_email_sent")
-        except MailerError as e:
-            # Comment is saved even if email fails
-            flash(f"Comment saved, email failed: {e}", "error")
-
-    flash("Comment added", "success")
-    return redirect(url_for("issue_view", issue_id=issue_id))
 
 @app.post("/issues/<int:issue_id>/close")
 @login_required
@@ -807,6 +830,146 @@ def issue_set_assignee(issue_id: int):
 def my_reported():
     issues = get_my_reported_issues(int(current_user.id), include_closed=True)
     return render_template("my_reported.html", issues=issues)
+
+# -------------------------------------------------
+# comments
+# -------------------------------------------------
+
+@app.post("/issues/<int:issue_id>/comment")
+@login_required
+def issue_add_comment(issue_id: int):
+    """
+    Add a comment to an issue.
+    If the actor is the reporter -> notify assignee (if exists).
+    If the actor is the assignee -> notify reporter.
+    (All DB interaction is in TrackletDB.)
+    """
+    body = (request.form.get("body") or "").strip()
+    if not body:
+        flash("Comment cannot be empty", "error")
+        return redirect(url_for("issue_view", issue_id=issue_id))
+
+    # Ensure issue exists + get details for email subject/body
+    issue = get_issue_view(issue_id)
+    if not issue:
+        abort(404)
+
+    # DB: insert comment + audit event
+    add_comment(issue_id, int(current_user.id), body)
+    log_issue_event(issue_id, int(current_user.id), "comment_added")
+
+    # DB: determine who should be notified (reporter<->assignee)
+    recipient = get_issue_notify_recipient(issue_id, int(current_user.id))
+
+    # Mail: notify the other party (if configured)
+    if recipient and mail_is_configured():
+        try:
+            issue_url = f"{request.url_root.rstrip('/')}{url_for('issue_view', issue_id=issue_id)}"
+            send_issue_comment(
+                to=recipient["email"],
+                recipient_name=recipient["name"],
+                issue_id=int(issue["id"]),
+                title=issue["title"],
+                actor_name=current_user.name,
+                comment_text=body,
+                issue_url=issue_url,
+            )
+            log_issue_event(issue_id, int(current_user.id), "comment_email_sent")
+        except MailerError as e:
+            # Comment is saved even if email fails
+            flash(f"Comment saved, email failed: {e}", "error")
+
+    flash("Comment added", "success")
+    return redirect(url_for("issue_view", issue_id=issue_id))
+
+@app.post("/issues/<int:issue_id>/comments/upload-temp")
+@login_required
+def comment_upload_temp(issue_id: int):
+    issue = get_issue_view(issue_id)
+    if not issue:
+        abort(404)
+
+    f = request.files.get("file")
+    if not f:
+        abort(400)
+
+    original = secure_filename(f.filename or "") or f"pasted_{uuid.uuid4().hex}.png"
+    ext = Path(original).suffix.lower()
+    stored = f"{uuid.uuid4().hex}{ext}"
+
+    tdir = _temp_comment_dir(issue_id)
+    path = tdir / stored
+    f.save(path)
+
+    mime_type = (f.mimetype or "").strip()
+    if not mime_type:
+        mime_type = mimetypes.guess_type(original)[0] or "application/octet-stream"
+
+    return jsonify({
+        "stored_name": stored,
+        "original_name": original,
+        "mime_type": mime_type,
+        "size_bytes": path.stat().st_size,
+    })
+
+@app.post("/issues/<int:issue_id>/comments")
+@login_required
+def comment_add_post(issue_id: int):
+    body = (request.form.get("body") or "").strip()
+
+    temp_stored = request.form.getlist("temp_stored[]")
+    if not body and not temp_stored:
+        flash("Comment is empty", "error")
+        return redirect(url_for("issue_view", issue_id=issue_id))
+
+    # 1) create comment
+    comment_id = add_comment(issue_id, int(current_user.id), body)
+
+    # 2) finalize temp attachments
+    _finalize_comment_temp_files(issue_id, comment_id, int(current_user.id))
+
+    log_issue_event(issue_id, int(current_user.id), "comment_added")
+    flash("Comment added", "success")
+    return redirect(url_for("issue_view", issue_id=issue_id) + "#comments")
+
+
+@app.get("/comment-files/<int:file_id>/view")
+@login_required
+def comment_file_view(file_id: int):
+    row = get_comment_file(file_id)
+    if not row:
+        abort(404)
+
+    issue_id = int(row["issue_id"])
+    comment_id = int(row["comment_id"])
+    full_path = _comment_dir(issue_id, comment_id) / row["stored_name"]
+    if not full_path.exists():
+        abort(404)
+
+    mime = (row["mime_type"] or "").strip()
+    if not mime:
+        mime = mimetypes.guess_type(row["original_name"] or row["stored_name"])[0] or "application/octet-stream"
+
+    return send_file(full_path, mimetype=mime, as_attachment=False, conditional=True)
+
+@app.get("/comment-files/<int:file_id>/download")
+@login_required
+def comment_file_download(file_id: int):
+    row = get_comment_file(file_id)
+    if not row:
+        abort(404)
+
+    issue_id = int(row["issue_id"])
+    comment_id = int(row["comment_id"])
+    full_path = _comment_dir(issue_id, comment_id) / row["stored_name"]
+    if not full_path.exists():
+        abort(404)
+
+    mime = (row["mime_type"] or "").strip() or "application/octet-stream"
+    return send_file(full_path, mimetype=mime, as_attachment=True,
+                     download_name=row["original_name"] or row["stored_name"],
+                     conditional=True)
+
 # -------------------------------------------------
 # Watcher
 # -------------------------------------------------

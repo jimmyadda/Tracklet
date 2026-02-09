@@ -131,6 +131,19 @@ CREATE TABLE IF NOT EXISTS issues (
   FOREIGN KEY(assignee_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS comment_files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  comment_id INTEGER NOT NULL,
+  uploader_id INTEGER NOT NULL,
+  stored_name TEXT NOT NULL,
+  original_name TEXT NOT NULL,
+  mime_type TEXT,
+  size_bytes INTEGER DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY(comment_id) REFERENCES issue_comments(id) ON DELETE CASCADE,
+  FOREIGN KEY(uploader_id) REFERENCES users(id)
+);
+
 CREATE TABLE IF NOT EXISTS issue_comments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   issue_id INTEGER NOT NULL,
@@ -571,6 +584,44 @@ def add_comment(issue_id: int, author_id: int, body: str) -> int:
     return db_write(
         "INSERT INTO issue_comments(issue_id, author_id, body) VALUES (?,?,?)",
         (issue_id, author_id, body.strip()),
+    )
+
+# -------------------------------------------------------
+# Comments files
+# -------------------------------------------------------
+
+def add_comment_file(comment_id: int, uploader_id: int, stored_name: str,
+                     original_name: str, mime_type: str, size_bytes: int) -> int:
+    return db_write(
+        """
+        INSERT INTO comment_files(comment_id, uploader_id, stored_name, original_name, mime_type, size_bytes)
+        VALUES (?,?,?,?,?,?)
+        """,
+        (comment_id, uploader_id, stored_name, original_name, mime_type or "", int(size_bytes or 0)),
+    )
+
+def list_comment_files_for_issue(issue_id: int) -> list[sqlite3.Row]:
+    # returns all files for all comments in one query (fast)
+    return db_read_all(
+        """
+        SELECT f.*, c.issue_id
+        FROM comment_files f
+        JOIN issue_comments c ON c.id = f.comment_id
+        WHERE c.issue_id = ?
+        ORDER BY f.created_at ASC
+        """,
+        (issue_id,),
+    )
+
+def get_comment_file(file_id: int) -> sqlite3.Row | None:
+    return db_read_one(
+        """
+        SELECT f.*, c.issue_id
+        FROM comment_files f
+        JOIN issue_comments c ON c.id = f.comment_id
+        WHERE f.id = ?
+        """,
+        (file_id,),
     )
 
 # -------------------------------------------------------

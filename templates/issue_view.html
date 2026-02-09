@@ -228,6 +228,155 @@
   color: var(--muted);
 }
 
+/* Outlook-like thread */
+.thread{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  max-height: 55vh;
+  overflow:auto;
+  padding-right: 6px;
+  margin-top: 8px;
+  margin-bottom: 12px;
+}
+
+.msg{
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+  border-radius:14px;
+  padding:12px 14px;
+}
+
+.msg-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:8px;
+}
+
+.msg-author{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.msg-author-meta{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+
+.msg-author-name{
+  font-weight:700;
+  color: var(--text);
+  font-size:13px;
+  line-height:1.1;
+}
+
+.msg-time{
+  color: var(--muted);
+  font-size:12px;
+  line-height:1;
+}
+
+.msg-body{
+  color: var(--text);
+  font-size:14px;
+  line-height:1.5;
+  white-space:pre-wrap;
+}
+
+/* Attachments inside comment */
+.msg-files{
+  margin-top:10px;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.thumb{
+  display:block;
+  width:140px;
+  height:92px;
+  border-radius:12px;
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.03);
+}
+.thumb img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+
+.file-pill{
+  display:inline-flex;
+  align-items:center;
+  height:30px;
+  padding:0 10px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  color: var(--text);
+  text-decoration:none;
+  font-size:12px;
+}
+
+/* Composer */
+.composer{
+  margin-top: 12px;
+  border-top:1px solid rgba(255,255,255,.08);
+  padding-top: 12px;
+}
+
+.composer-actions{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-top:10px;
+}
+
+/* Small uploader for comment composer */
+.uploader-zone--small{
+  padding:10px 12px;
+  border-radius:12px;
+  border:1.5px dashed rgba(255,255,255,.22);
+  background: rgba(255,255,255,.03);
+  display:flex;
+  align-items:center;
+  gap:10px;
+  cursor:pointer;
+  transition:.2s ease;
+  max-width: 360px;
+}
+
+.uploader-zone--small:hover{
+  border-color: var(--purple-1);
+  background: rgba(255,255,255,.06);
+}
+
+.uploader-zone--small:focus{
+  outline:none;
+  box-shadow: 0 0 0 3px rgba(155,140,255,.22);
+}
+
+.pending-thumbs{
+  margin-top:10px;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.pending-thumbs img{
+  width:90px;
+  height:62px;
+  object-fit:cover;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,.12);
+}
+
 </style>
   <div class="header">
     <div>
@@ -362,37 +511,76 @@
 </div>
     </div>
 
-<div class="card">
+<div class="card" id="comments">
   <div class="card-title">Comments</div>
 
-  <!-- Add comment -->
-  <form method="post" action="{{ url_for('issue_add_comment', issue_id=issue.id) }}" class="comment-form">
-    <textarea name="body" class="comment-input" rows="3" placeholder="Write a comment…" required></textarea>
-    <div class="comment-actions">
-      <button class="btn btn-primary" type="submit" style="margin-bottom:0;">Add comment</button>
-    </div>
-  </form>
-
-  <div class="comment-list">
+  <!-- Thread -->
+  <div class="thread">
     {% for c in comments %}
-      <div class="comment-item">
-        <div class="comment-head">
-          <div class="comment-author">
+      <div class="msg">
+        <div class="msg-head">
+          <div class="msg-author">
             <div class="comment-avatar">{{ (c.author_name or "U")[:1] | upper }}</div>
-            <div class="comment-author-meta">
-              <div class="comment-author-name">{{ c.author_name }} : </div>
-              <div class="comment-time">{{ (c.created_at or "")[:19] }}</div>
+            <div class="msg-author-meta">
+              <div class="msg-author-name">{{ c.author_name }}</div>
+              <div class="msg-time">{{ (c.created_at or "")[:19] }}</div>
             </div>
           </div>
         </div>
 
-        <div class="comment-body">{{ c.body }}</div>
+        <div class="msg-body">{{ c.body }}</div>
+
+        {% if c.files and c.files|length > 0 %}
+          <div class="msg-files">
+            {% for f in c.files %}
+              {% if f.mime_type and f.mime_type.startswith('image/') %}
+                <a class="thumb" target="_blank" href="{{ url_for('comment_file_view', file_id=f.id) }}">
+                  <img src="{{ url_for('comment_file_view', file_id=f.id) }}" alt="{{ f.original_name }}">
+                </a>
+              {% else %}
+                <a class="file-pill" href="{{ url_for('comment_file_download', file_id=f.id) }}">
+                  {{ f.original_name }}
+                </a>
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% endif %}
       </div>
     {% else %}
       <div class="muted">No comments yet.</div>
     {% endfor %}
   </div>
+
+  <!-- Composer -->
+  <form method="post"
+        action="{{ url_for('comment_add_post', issue_id=issue.id) }}"
+        class="composer">
+
+    <textarea name="body" class="comment-input" rows="4"
+              placeholder="Write a comment…"></textarea>
+
+    <!-- temp uploads get stored here as hidden inputs -->
+    <div id="commentTempUploads"></div>
+
+    <div class="composer-actions">
+      <div class="uploader-zone uploader-zone--small"
+           tabindex="0"
+           data-upload-url="{{ url_for('comment_upload_temp', issue_id=issue.id) }}">
+        <input type="file" class="uploader-input" accept="image/*" hidden>
+        <div class="uploader-icon">⬆</div>
+        <div class="uploader-text">
+          <strong>Add image</strong>
+          <span>Hover here, then paste (Ctrl+V) or click</span>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" type="submit" style="margin-bottom:0;">Add comment</button>
+    </div>
+
+    <div id="pendingThumbs" class="pending-thumbs"></div>
+  </form>
 </div>
+
 
   </div>
 
@@ -445,7 +633,78 @@
     }
   }
 })();
+
+
 </script>
 
+<script>
+(function(){
+  const zone = document.querySelector('.uploader-zone--small');
+  if (!zone) return;
+
+  const input = zone.querySelector('.uploader-input');
+  const uploadUrl = zone.dataset.uploadUrl;
+
+  const hiddenBox = document.getElementById('commentTempUploads');
+  const pending = document.getElementById('pendingThumbs');
+  const hintSpan = zone.querySelector('.uploader-text span');
+
+  zone.addEventListener('mouseenter', () => zone.focus());
+  zone.addEventListener('click', () => input.click());
+
+  input.addEventListener('change', () => {
+    if (input.files.length) uploadFile(input.files[0]);
+    input.value = "";
+  });
+
+  zone.addEventListener('paste', (e) => {
+    const items = e.clipboardData?.items || [];
+    const imgItem = Array.from(items).find(i => i.type?.startsWith('image/'));
+    if (!imgItem) return;
+    e.preventDefault();
+    uploadFile(imgItem.getAsFile());
+  });
+
+  async function uploadFile(file){
+    const fd = new FormData();
+    fd.append('file', file, file.name || `pasted_${Date.now()}.png`);
+
+    if (hintSpan) hintSpan.textContent = 'Uploading…';
+
+    const res = await fetch(uploadUrl, {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: {'X-Requested-With':'fetch'}
+    });
+
+    if (!res.ok) {
+      if (hintSpan) hintSpan.textContent = 'Upload failed';
+      return;
+    }
+
+    const data = await res.json();
+
+    addHidden('temp_stored[]', data.stored_name);
+    addHidden('temp_original[]', data.original_name || '');
+    addHidden('temp_mime[]', data.mime_type || '');
+    addHidden('temp_size[]', String(data.size_bytes || 0));
+
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(file);
+    pending.appendChild(img);
+
+    if (hintSpan) hintSpan.textContent = 'Hover here, then paste (Ctrl+V) or click';
+  }
+
+  function addHidden(name, value){
+    const i = document.createElement('input');
+    i.type = 'hidden';
+    i.name = name;
+    i.value = value || '';
+    hiddenBox.appendChild(i);
+  }
+})();
+</script>
 
 {% endblock %}
