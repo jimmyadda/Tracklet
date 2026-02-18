@@ -944,10 +944,11 @@ def comment_add_post(issue_id: int):
                 "mime_type": (f["mime_type"] or "").strip() or "application/octet-stream",
             })
     recipient = get_issue_notify_recipient(issue_id, int(current_user.id))
-
+    print("recipient - ",mail_is_configured())
     # Mail: notify the other party (if configured)
     if recipient and mail_is_configured():
         try:
+            print(recipient["name"], " : ",recipient["email"])
             issue_url = f"{request.url_root.rstrip('/')}{url_for('issue_view', issue_id=issue_id)}"
             send_issue_comment(
                 to=recipient["email"],
@@ -960,6 +961,7 @@ def comment_add_post(issue_id: int):
                 attachments=attachments,   # ✅ NEW
             )
             log_issue_event(issue_id, int(current_user.id), "comment_email_sent")
+            flash("email sent", "success")
         except MailerError as e:
             # Comment is saved even if email fails
             flash(f"Comment saved, email failed: {e}", "error")

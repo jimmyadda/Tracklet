@@ -37,7 +37,7 @@ class Settings:
      # ---- Mail (dynamic) ----
     @property
     def MAIL_PROVIDER(self) -> str:
-        return _env("MAIL_PROVIDER", "smtp")
+        return _env("MAIL_PROVIDER", "resend")
 
     @property
     def RESEND_API_KEY(self) -> str:
