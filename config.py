@@ -42,7 +42,7 @@ class Settings:
     @property
     def RESEND_API_KEY(self) -> str:
         return _env("RESEND_API_KEY", "")
-
+ 
     @property
     def SMTP_FROM(self) -> str:
         return _env("SMTP_FROM", "no-reply@trackletapp.org")

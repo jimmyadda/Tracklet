@@ -665,9 +665,6 @@ def issue_view(issue_id: int):
     )
 
 
-
-
-
 @app.post("/issues/<int:issue_id>/close")
 @login_required
 def issue_close(issue_id: int):
@@ -882,6 +879,7 @@ def issue_add_comment(issue_id: int):
     flash("Comment added", "success")
     return redirect(url_for("issue_view", issue_id=issue_id))
 
+
 @app.post("/issues/<int:issue_id>/comments/upload-temp")
 @login_required
 def comment_upload_temp(issue_id: int):
@@ -921,12 +919,35 @@ def comment_add_post(issue_id: int):
     if not body and not temp_stored:
         flash("Comment is empty", "error")
         return redirect(url_for("issue_view", issue_id=issue_id))
+    
 
+    issue = get_issue_view(issue_id)
     # 1) create comment
     comment_id = add_comment(issue_id, int(current_user.id), body)
-
+    log_issue_event(issue_id, int(current_user.id), "comment_added")
     # 2) finalize temp attachments
     _finalize_comment_temp_files(issue_id, comment_id, int(current_user.id))
+    # DB: determine who should be notified (reporter<->assignee)
+    recipient = get_issue_notify_recipient(issue_id, int(current_user.id))
+
+    # Mail: notify the other party (if configured)
+    if recipient and mail_is_configured():
+        try:
+            issue_url = f"{request.url_root.rstrip('/')}{url_for('issue_view', issue_id=issue_id)}"
+            send_issue_comment(
+                to=recipient["email"],
+                recipient_name=recipient["name"],
+                issue_id=int(issue["id"]),
+                title=issue["title"],
+                actor_name=current_user.name,
+                comment_text=body,
+                issue_url=issue_url,
+            )
+            log_issue_event(issue_id, int(current_user.id), "comment_email_sent")
+        except MailerError as e:
+            # Comment is saved even if email fails
+            flash(f"Comment saved, email failed: {e}", "error")
+
 
     log_issue_event(issue_id, int(current_user.id), "comment_added")
     flash("Comment added", "success")
