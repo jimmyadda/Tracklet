@@ -17,7 +17,7 @@ from TrackletDB import (
     add_comment_file, add_issue_file, add_role, deactivate_project, delete_issue_file, delete_project_hard, delete_role, delete_user_cascade, ensure_default_roles, get_comment_file, get_issue_file, get_issue_notify_recipient, get_my_reported_issues, get_my_tasks_history, get_project_name, init_db, bootstrap_if_empty,
 
     # users
-    get_user_by_id, get_user_by_email, list_comment_files_for_issue, list_issue_files,  list_roles_active, list_roles_admin,
+    get_user_by_id, get_user_by_email, list_comment_files, list_comment_files_for_issue, list_issue_files,  list_roles_active, list_roles_admin,
     list_users_active, list_users_admin, create_user,
 
     # projects
@@ -880,6 +880,10 @@ def issue_add_comment(issue_id: int):
     return redirect(url_for("issue_view", issue_id=issue_id))
 
 
+#attached file helper
+def _comment_file_path(issue_id: int, comment_id: int, stored_name: str) -> Path:
+    return _comment_dir(issue_id, comment_id) / stored_name
+
 @app.post("/issues/<int:issue_id>/comments/upload-temp")
 @login_required
 def comment_upload_temp(issue_id: int):
@@ -928,6 +932,17 @@ def comment_add_post(issue_id: int):
     # 2) finalize temp attachments
     _finalize_comment_temp_files(issue_id, comment_id, int(current_user.id))
     # DB: determine who should be notified (reporter<->assignee)
+        # ✅ gather attachments for email (after finalize)
+    comment_files = list_comment_files(comment_id)
+    attachments = []
+    for f in comment_files:
+        p = _comment_file_path(issue_id, comment_id, f["stored_name"])
+        if p.exists():
+            attachments.append({
+                "path": str(p),
+                "filename": f["original_name"] or f["stored_name"],
+                "mime_type": (f["mime_type"] or "").strip() or "application/octet-stream",
+            })
     recipient = get_issue_notify_recipient(issue_id, int(current_user.id))
 
     # Mail: notify the other party (if configured)
@@ -942,6 +957,7 @@ def comment_add_post(issue_id: int):
                 actor_name=current_user.name,
                 comment_text=body,
                 issue_url=issue_url,
+                attachments=attachments,   # ✅ NEW
             )
             log_issue_event(issue_id, int(current_user.id), "comment_email_sent")
         except MailerError as e:
@@ -949,7 +965,7 @@ def comment_add_post(issue_id: int):
             flash(f"Comment saved, email failed: {e}", "error")
 
 
-    log_issue_event(issue_id, int(current_user.id), "comment_added")
+    #log_issue_event(issue_id, int(current_user.id), "comment_added")
     flash("Comment added", "success")
     return redirect(url_for("issue_view", issue_id=issue_id) + "#comments")
 

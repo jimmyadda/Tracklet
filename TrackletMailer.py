@@ -15,6 +15,18 @@ from config import settings
 
 class MailerError(RuntimeError):
     pass
+import base64
+
+def _attachments_for_resend(attachments: list[dict]) -> list[dict]:
+    out = []
+    for a in attachments:
+        with open(a["path"], "rb") as f:
+            content = base64.b64encode(f.read()).decode("utf-8")
+        out.append({
+            "filename": a["filename"],
+            "content": content,
+        })
+    return out
 
 def _provider() -> str:
     return (settings.MAIL_PROVIDER or "smtp").strip().lower()
@@ -25,13 +37,27 @@ def is_configured() -> bool:
     return bool(settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASS and (settings.SMTP_FROM or settings.SMTP_USER))
 
 
-def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = None) -> None:
+import base64
+import mimetypes
+from email.message import EmailMessage
+from pathlib import Path
+from typing import Optional
+
+def send_email(
+    to: str,
+    subject: str,
+    body: str,
+    *,
+    from_addr: Optional[str] = None,
+    attachments: Optional[list[dict]] = None,  # ✅ NEW
+) -> None:
 
     if not is_configured():
         raise MailerError("Mailer not configured")
 
     sender = from_addr or settings.SMTP_FROM or settings.SMTP_USER
     p = _provider()
+    attachments = attachments or []
 
     # --- Resend (HTTPS) ---
     if p == "resend":
@@ -39,26 +65,41 @@ def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = N
         if not api_key:
             raise MailerError("RESEND_API_KEY missing")
 
+        resend_attachments = []
         try:
+            for a in attachments:
+                path = Path(a["path"])
+                if not path.exists():
+                    continue
+                filename = a.get("filename") or path.name
+
+                content_b64 = base64.b64encode(path.read_bytes()).decode("utf-8")
+                resend_attachments.append({
+                    "filename": filename,
+                    "content": content_b64,
+                })
+
+            payload = {
+                "from": sender,
+                "to": [to],
+                "subject": subject,
+                "text": body,
+                "reply_to": sender,
+            }
+            if resend_attachments:
+                payload["attachments"] = resend_attachments
+
             r = requests.post(
                 "https://api.resend.com/emails",
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
                 },
-                json={
-                    "from": sender,
-                    "to": [to],
-                    "subject": subject,
-                    "text": body,
-                    "reply_to": sender
-                },
+                json=payload,
                 timeout=30,
             )
 
             print(f"[MAIL] Resend to={to} subject={subject} status={r.status_code}")
-            print("RESEND configured?", bool(settings.RESEND_API_KEY), "FROM:", settings.SMTP_FROM, "provider:", _provider())
-
             if r.status_code >= 400:
                 raise MailerError(f"Resend error {r.status_code}: {r.text}")
             return
@@ -72,6 +113,20 @@ def send_email(to: str, subject: str, body: str, *, from_addr: Optional[str] = N
     msg["To"] = to
     msg["Subject"] = subject
     msg.set_content(body)
+
+    # ✅ attach files for SMTP
+    for a in attachments:
+        path = Path(a["path"])
+        if not path.exists():
+            continue
+
+        filename = a.get("filename") or path.name
+        mime = (a.get("mime_type") or "").strip()
+        if not mime:
+            mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+
+        maintype, subtype = (mime.split("/", 1) + ["octet-stream"])[:2]
+        msg.add_attachment(path.read_bytes(), maintype=maintype, subtype=subtype, filename=filename)
 
     try:
         port = int(settings.SMTP_PORT)
@@ -220,7 +275,9 @@ def send_issue_comment(
     actor_name: str,
     comment_text: str,
     issue_url: str,
+    attachments=None
 ):
+    attachments = attachments or []
     subject = f"[Tracklet] New note on #{issue_id}: {title}"
     body = f"""Hi {recipient_name},
 
@@ -230,7 +287,7 @@ def send_issue_comment(
 
 Open issue: {issue_url}
 """
-    send_email(to=to, subject=subject, body=body)
+    send_email(to=to, subject=subject, body=body , attachments=attachments)
 
 def send_issue_status_changed(
     to: str,

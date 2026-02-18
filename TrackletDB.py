@@ -624,6 +624,16 @@ def get_comment_file(file_id: int) -> sqlite3.Row | None:
         (file_id,),
     )
 
+def list_comment_files(comment_id: int) -> list[sqlite3.Row]:
+    return db_read_all(
+        """
+        SELECT *
+        FROM comment_files
+        WHERE comment_id = ?
+        ORDER BY created_at ASC
+        """,
+        (comment_id,),
+    )
 # -------------------------------------------------------
 # Roles
 # -------------------------------------------------------
