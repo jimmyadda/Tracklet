@@ -944,7 +944,7 @@ def comment_add_post(issue_id: int):
                 "mime_type": (f["mime_type"] or "").strip() or "application/octet-stream",
             })
     recipient = get_issue_notify_recipient(issue_id, int(current_user.id))
-    print("recipient - ",mail_is_configured())
+    print("recipient - ",recipient["email"],mail_is_configured())
     # Mail: notify the other party (if configured)
     if recipient and mail_is_configured():
         try:
